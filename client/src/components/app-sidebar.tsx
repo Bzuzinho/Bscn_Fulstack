@@ -13,6 +13,7 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { ThemeToggle } from "./ThemeToggle";
+import logoPath from "@assets/BSCN_Logo_1759963867913.png";
 
 const menuItems = [
   {
@@ -64,11 +65,9 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="p-6 border-b">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-primary flex items-center justify-center">
-            <Activity className="h-6 w-6 text-primary-foreground" />
-          </div>
+          <img src={logoPath} alt="BSCN Logo" className="h-12 w-12 object-contain" />
           <div>
-            <h2 className="text-lg font-semibold">Clube Natação</h2>
+            <h2 className="text-lg font-semibold">Benedita Sport Club</h2>
             <p className="text-xs text-muted-foreground">Sistema de Gestão</p>
           </div>
         </div>
