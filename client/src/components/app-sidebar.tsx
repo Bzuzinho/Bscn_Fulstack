@@ -1,4 +1,4 @@
-import { Users, Activity, CreditCard, Package, Mail, Settings, BarChart3, Home } from "lucide-react";
+import { Users, Activity, CreditCard, Package, Mail, Settings, BarChart3, Home, LogOut } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -12,7 +12,10 @@ import {
   SidebarHeader,
   SidebarFooter,
 } from "@/components/ui/sidebar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
+import { useAuth } from "@/hooks/useAuth";
 import logoPath from "@assets/BSCN_Logo_1759963867913.png";
 
 const menuItems = [
@@ -60,6 +63,34 @@ const menuItems = [
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const { user } = useAuth();
+
+  const handleLogout = () => {
+    window.location.href = "/api/logout";
+  };
+
+  const getUserInitials = () => {
+    if (user?.firstName && user?.lastName) {
+      return `${user.firstName[0]}${user.lastName[0]}`.toUpperCase();
+    }
+    if (user?.email) {
+      return user.email.substring(0, 2).toUpperCase();
+    }
+    return "U";
+  };
+
+  const getUserDisplayName = () => {
+    if (user?.firstName && user?.lastName) {
+      return `${user.firstName} ${user.lastName}`;
+    }
+    if (user?.firstName) {
+      return user.firstName;
+    }
+    if (user?.email) {
+      return user.email.split('@')[0];
+    }
+    return "User";
+  };
 
   return (
     <Sidebar>
@@ -91,19 +122,34 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="p-4 border-t">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-              <span className="text-sm font-medium text-primary">AD</span>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-sm font-medium">Admin</span>
-              <span className="text-xs text-muted-foreground">admin@clube.pt</span>
-            </div>
+      <SidebarFooter className="p-4 border-t space-y-3">
+        <div className="flex items-center gap-3">
+          <Avatar className="h-8 w-8">
+            <AvatarImage src={user?.profileImageUrl || undefined} alt={getUserDisplayName()} />
+            <AvatarFallback className="bg-primary/10 text-primary text-sm" data-testid="text-user-initials">
+              {getUserInitials()}
+            </AvatarFallback>
+          </Avatar>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium truncate" data-testid="text-user-name">
+              {getUserDisplayName()}
+            </p>
+            <p className="text-xs text-muted-foreground truncate" data-testid="text-user-email">
+              {user?.email || "No email"}
+            </p>
           </div>
           <ThemeToggle />
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleLogout}
+          className="w-full"
+          data-testid="button-logout"
+        >
+          <LogOut className="h-4 w-4 mr-2" />
+          Sair
+        </Button>
       </SidebarFooter>
     </Sidebar>
   );
