@@ -13,6 +13,7 @@ interface ActivityCardProps {
   location: string;
   participants: number;
   testId?: string;
+  onViewDetails?: () => void;
 }
 
 const typeColors = {
@@ -29,7 +30,7 @@ const typeLabels = {
   reuniao: "Reunião",
 };
 
-export function ActivityCard({ title, type, date, time, location, participants, testId }: ActivityCardProps) {
+export function ActivityCard({ title, type, date, time, location, participants, testId, onViewDetails }: ActivityCardProps) {
   return (
     <Card className="hover-elevate" data-testid={testId}>
       <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-3">
@@ -51,14 +52,16 @@ export function ActivityCard({ title, type, date, time, location, participants, 
           <MapPin className="h-4 w-4" />
           <span>{location}</span>
         </div>
-        <div className="flex items-center justify-between pt-2 border-t">
+        <div className="flex items-center justify-between gap-2 pt-2 border-t">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Users className="h-4 w-4" />
             <span>{participants} participantes</span>
           </div>
-          <Button variant="outline" size="sm" data-testid={`${testId}-view`}>
-            Ver Detalhes
-          </Button>
+          {onViewDetails && (
+            <Button variant="outline" size="sm" onClick={onViewDetails} data-testid={`${testId}-view`}>
+              Ver Detalhes
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>
