@@ -441,8 +441,8 @@ export default function Pessoas() {
                     <FormItem>
                       <FormLabel>Escalão</FormLabel>
                       <Select 
-                        onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
-                        value={field.value?.toString() || ""}
+                        onValueChange={(value) => field.onChange(value === "none" ? null : parseInt(value))}
+                        value={field.value ? field.value.toString() : "none"}
                       >
                         <FormControl>
                           <SelectTrigger data-testid="input-escalao">
@@ -450,7 +450,7 @@ export default function Pessoas() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="">Nenhum</SelectItem>
+                          <SelectItem value="none">Nenhum</SelectItem>
                           {escaloes.map((escalao) => (
                             <SelectItem key={escalao.id} value={escalao.id.toString()}>
                               {escalao.nome}

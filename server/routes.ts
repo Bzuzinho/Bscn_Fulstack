@@ -489,9 +489,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/users', isAuthenticated, async (req, res) => {
+    try {
+      // Convert empty strings to null for optional fields
+      const sanitized = {
+        ...req.body,
+        dataNascimento: req.body.dataNascimento === "" ? null : req.body.dataNascimento,
+        email: req.body.email === "" ? null : req.body.email,
+        contacto: req.body.contacto === "" ? null : req.body.contacto,
+        nif: req.body.nif === "" ? null : req.body.nif,
+        morada: req.body.morada === "" ? null : req.body.morada,
+        codigoPostal: req.body.codigoPostal === "" ? null : req.body.codigoPostal,
+        localidade: req.body.localidade === "" ? null : req.body.localidade,
+        numeroSocio: req.body.numeroSocio === "" ? null : req.body.numeroSocio,
+        observacoesConfig: req.body.observacoesConfig === "" ? null : req.body.observacoesConfig,
+      };
+      const validated = upsertUserSchema.parse(sanitized);
+      const user = await storage.upsertUser(validated);
+      res.status(201).json(user);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      console.error("Error creating user:", error);
+      res.status(500).json({ message: "Failed to create user" });
+    }
+  });
+
   app.put('/api/users/:id', isAuthenticated, async (req, res) => {
     try {
-      const validated = upsertUserSchema.partial().parse(req.body);
+      // Convert empty strings to null for optional fields
+      const sanitized = {
+        ...req.body,
+        dataNascimento: req.body.dataNascimento === "" ? null : req.body.dataNascimento,
+        email: req.body.email === "" ? null : req.body.email,
+        contacto: req.body.contacto === "" ? null : req.body.contacto,
+        nif: req.body.nif === "" ? null : req.body.nif,
+        morada: req.body.morada === "" ? null : req.body.morada,
+        codigoPostal: req.body.codigoPostal === "" ? null : req.body.codigoPostal,
+        localidade: req.body.localidade === "" ? null : req.body.localidade,
+        numeroSocio: req.body.numeroSocio === "" ? null : req.body.numeroSocio,
+        observacoesConfig: req.body.observacoesConfig === "" ? null : req.body.observacoesConfig,
+      };
+      const validated = upsertUserSchema.partial().parse(sanitized);
       const user = await storage.updateUser(req.params.id, validated);
       if (!user) {
         return res.status(404).json({ message: "User not found" });
