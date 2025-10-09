@@ -7,13 +7,14 @@ import { isUnauthorizedError } from "@/lib/authUtils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Users, Pencil, Trash2, Phone, Mail, MapPin, Calendar } from "lucide-react";
+import { Plus, Users, Pencil, Trash2, Phone, Mail, MapPin, Calendar, User as UserIcon } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { upsertUserSchema, type User, type Escalao } from "@shared/schema";
@@ -221,15 +222,23 @@ export default function Pessoas() {
               data-testid={`card-user-${user.id}`}
             >
               <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-3">
-                <div className="flex-1">
-                  <h3 className="font-semibold text-base" data-testid={`user-${user.id}-name`}>
-                    {user.name || "Sem nome"}
-                  </h3>
-                  {user.numeroSocio && (
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Sócio nº {user.numeroSocio}
-                    </p>
-                  )}
+                <div className="flex items-center gap-3 flex-1">
+                  <Avatar className="h-12 w-12">
+                    <AvatarImage src={user.profileImageUrl ?? undefined} alt={user.name || ""} />
+                    <AvatarFallback>
+                      {user.name ? user.name.charAt(0).toUpperCase() : <UserIcon className="h-6 w-6" />}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-base" data-testid={`user-${user.id}-name`}>
+                      {user.name || "Sem nome"}
+                    </h3>
+                    {user.numeroSocio && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Sócio nº {user.numeroSocio}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <Badge 
                   className={estadoColors[user.estadoUtilizador || "ativo"]}
