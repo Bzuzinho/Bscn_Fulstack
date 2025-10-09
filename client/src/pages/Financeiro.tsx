@@ -7,100 +7,122 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, Euro, TrendingUp, AlertCircle, Calendar, Check, Pencil, Trash2 } from "lucide-react";
+import { Plus, Euro, TrendingUp, AlertCircle, Calendar, Check, FileText, Wand2, Receipt } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertMensalidadeSchema, type Mensalidade, type Pessoa } from "@shared/schema";
 import { z } from "zod";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
+import type { User, TipoMensalidade, CentroCusto } from "@shared/schema";
+import { Building2, Layers } from "lucide-react";
 
-const mensalidadeFormSchema = insertMensalidadeSchema.extend({
-  pessoaId: z.number({ required_error: "Pessoa é obrigatória" }),
-  valor: z.string().min(1, "Valor é obrigatório"),
-  mes: z.number().min(1, "Mês deve ser entre 1 e 12").max(12, "Mês deve ser entre 1 e 12"),
-  ano: z.number().min(2020, "Ano inválido"),
-  dataVencimento: z.string().min(1, "Data de vencimento é obrigatória"),
-  status: z.string().min(1, "Status é obrigatório"),
-});
-
-type MensalidadeFormData = z.infer<typeof mensalidadeFormSchema>;
-
-type MensalidadeWithPessoa = Mensalidade & {
-  pessoaNome: string;
-};
-
-interface StatsData {
-  totalReceita: number;
-  totalPendente: number;
-  totalAtrasado: number;
-  countPendentes: number;
-  countAtrasadas: number;
-  taxaPagamento: number;
+// Fatura com dados de user (da API otimizada)
+interface FaturaWithUser {
+  id: number;
+  userId: string;
+  numero?: string | null;
+  descricao?: string | null;
+  valorTotal: string;
+  mesReferencia: number;
+  anoReferencia: number;
+  dataEmissao: string;
+  dataVencimento: string;
+  estado: string;
+  numeroRecibo?: string | null;
+  referenciaPagamento?: string | null;
+  dataPagamento?: string | null;
+  userName: string;
+  userNumeroSocio?: number | null;
 }
 
+const generateInvoicesSchema = z.object({
+  userId: z.string().min(1, "Atleta é obrigatório"),
+  epoca: z.string().regex(/^\d{4}\/\d{4}$/, "Época deve estar no formato YYYY/YYYY"),
+  dataInicio: z.string().min(1, "Data de início é obrigatória"),
+});
+
+const markAsPaidSchema = z.object({
+  numeroRecibo: z.string().min(1, "Número do recibo é obrigatório"),
+  referencia: z.string().optional(),
+});
+
+type GenerateInvoicesFormData = z.infer<typeof generateInvoicesSchema>;
+type MarkAsPaidFormData = z.infer<typeof markAsPaidSchema>;
+
 export default function Financeiro() {
-  const [selectedTab, setSelectedTab] = useState<"todas" | "pagas" | "pendentes" | "atrasadas">("todas");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingMensalidade, setEditingMensalidade] = useState<MensalidadeWithPessoa | null>(null);
+  const [selectedTab, setSelectedTab] = useState<"todas" | "pendentes" | "pagas" | "atrasadas" | "futuras" | "config">("todas");
+  const [isGenerateDialogOpen, setIsGenerateDialogOpen] = useState(false);
+  const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
+  const [selectedFatura, setSelectedFatura] = useState<FaturaWithUser | null>(null);
   const { toast } = useToast();
 
-  const form = useForm<MensalidadeFormData>({
-    resolver: zodResolver(mensalidadeFormSchema),
+  const generateForm = useForm<GenerateInvoicesFormData>({
+    resolver: zodResolver(generateInvoicesSchema),
     defaultValues: {
-      pessoaId: 0,
-      valor: "",
-      mes: new Date().getMonth() + 1,
-      ano: new Date().getFullYear(),
-      dataVencimento: "",
-      dataPagamento: "",
-      status: "pendente",
-      descricao: "",
+      userId: "",
+      epoca: "2024/2025",
+      dataInicio: format(new Date(2024, 8, 1), "yyyy-MM-dd"), // 1 de Setembro 2024
     },
   });
 
-  const { data: pessoas = [] } = useQuery<Pessoa[]>({
-    queryKey: ["/api/pessoas"],
-  });
-
-  const { data: stats, isLoading: isStatsLoading } = useQuery<StatsData>({
-    queryKey: ["/api/mensalidades", "stats"],
-    queryFn: async () => {
-      const res = await fetch("/api/mensalidades/stats");
-      if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
-      return res.json();
+  const paymentForm = useForm<MarkAsPaidFormData>({
+    resolver: zodResolver(markAsPaidSchema),
+    defaultValues: {
+      numeroRecibo: "",
+      referencia: "",
     },
   });
 
-  const { data: mensalidades = [], isLoading: isMensalidadesLoading } = useQuery<MensalidadeWithPessoa[]>({
-    queryKey: ["/api/mensalidades"],
+  const { data: users = [] } = useQuery<User[]>({
+    queryKey: ["/api/users"],
   });
 
-  const saveMutation = useMutation({
-    mutationFn: async (data: MensalidadeFormData) => {
-      if (editingMensalidade) {
-        await apiRequest("PUT", `/api/mensalidades/${editingMensalidade.id}`, data);
-      } else {
-        await apiRequest("POST", "/api/mensalidades", data);
-      }
+  const { data: faturas = [], isLoading: isFaturasLoading } = useQuery<FaturaWithUser[]>({
+    queryKey: ["/api/faturas"],
+  });
+
+  const { data: tiposMensalidade = [], isLoading: isTiposLoading } = useQuery<TipoMensalidade[]>({
+    queryKey: ["/api/tipos-mensalidade"],
+  });
+
+  const { data: centrosCusto = [], isLoading: isCentrosLoading } = useQuery<CentroCusto[]>({
+    queryKey: ["/api/centros-custo"],
+  });
+
+  // Calcular estatísticas
+  const stats = {
+    totalReceita: faturas
+      .filter(f => f.estado === "paga")
+      .reduce((sum, f) => sum + parseFloat(f.valorTotal), 0),
+    totalPendente: faturas
+      .filter(f => f.estado === "pendente")
+      .reduce((sum, f) => sum + parseFloat(f.valorTotal), 0),
+    totalAtrasado: faturas
+      .filter(f => f.estado === "em_divida")
+      .reduce((sum, f) => sum + parseFloat(f.valorTotal), 0),
+    countPendentes: faturas.filter(f => f.estado === "pendente").length,
+    countAtrasadas: faturas.filter(f => f.estado === "em_divida").length,
+    countPagas: faturas.filter(f => f.estado === "paga").length,
+  };
+
+  const generateInvoicesMutation = useMutation({
+    mutationFn: async (data: GenerateInvoicesFormData) => {
+      const res = await apiRequest("POST", "/api/faturas/gerar", data);
+      return res;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/mensalidades"] });
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/faturas"] });
       toast({
-        title: editingMensalidade ? "Mensalidade atualizada" : "Mensalidade criada",
-        description: editingMensalidade 
-          ? "Mensalidade atualizada com sucesso." 
-          : "Nova mensalidade adicionada com sucesso.",
+        title: "Faturas geradas",
+        description: `${data.geradas} faturas foram geradas com sucesso para ${data.epoca}.`,
       });
-      setIsDialogOpen(false);
-      setEditingMensalidade(null);
-      form.reset();
+      setIsGenerateDialogOpen(false);
+      generateForm.reset();
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
@@ -116,25 +138,25 @@ export default function Financeiro() {
       }
       toast({
         title: "Erro",
-        description: "Falha ao guardar mensalidade.",
+        description: error.message || "Falha ao gerar faturas.",
         variant: "destructive",
       });
     },
   });
 
   const markAsPaidMutation = useMutation({
-    mutationFn: async (mensalidade: MensalidadeWithPessoa) => {
-      await apiRequest("PUT", `/api/mensalidades/${mensalidade.id}`, {
-        status: "pago",
-        dataPagamento: new Date().toISOString().split('T')[0],
-      });
+    mutationFn: async ({ faturaId, data }: { faturaId: number; data: MarkAsPaidFormData }) => {
+      await apiRequest("POST", `/api/faturas/${faturaId}/pagar`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/mensalidades"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/faturas"] });
       toast({
         title: "Pagamento registado",
-        description: "Mensalidade marcada como paga.",
+        description: "Fatura marcada como paga com sucesso.",
       });
+      setIsPaymentDialogOpen(false);
+      setSelectedFatura(null);
+      paymentForm.reset();
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
@@ -156,87 +178,46 @@ export default function Financeiro() {
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/mensalidades/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/mensalidades"] });
-      toast({
-        title: "Mensalidade eliminada",
-        description: "Mensalidade eliminada com sucesso.",
-      });
-    },
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Não autorizado",
-          description: "A fazer login novamente...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return;
-      }
-      toast({
-        title: "Erro",
-        description: "Falha ao eliminar mensalidade.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleOpenDialog = (mensalidade?: MensalidadeWithPessoa) => {
-    if (mensalidade) {
-      setEditingMensalidade(mensalidade);
-      form.reset({
-        pessoaId: mensalidade.pessoaId,
-        valor: mensalidade.valor,
-        mes: mensalidade.mes,
-        ano: mensalidade.ano,
-        dataVencimento: mensalidade.dataVencimento,
-        dataPagamento: mensalidade.dataPagamento || "",
-        status: mensalidade.status,
-        descricao: mensalidade.descricao || "",
-      });
-    } else {
-      setEditingMensalidade(null);
-      form.reset({
-        pessoaId: 0,
-        valor: "",
-        mes: new Date().getMonth() + 1,
-        ano: new Date().getFullYear(),
-        dataVencimento: "",
-        dataPagamento: "",
-        status: "pendente",
-        descricao: "",
-      });
-    }
-    setIsDialogOpen(true);
+  const handleGenerateInvoices = (data: GenerateInvoicesFormData) => {
+    generateInvoicesMutation.mutate(data);
   };
 
-  const handleSubmit = (data: MensalidadeFormData) => {
-    saveMutation.mutate(data);
+  const handleMarkAsPaid = (data: MarkAsPaidFormData) => {
+    if (!selectedFatura) return;
+    markAsPaidMutation.mutate({ faturaId: selectedFatura.id, data });
   };
 
-  const statusColors = {
-    pago: "bg-chart-2 text-white",
+  const handleOpenPaymentDialog = (fatura: FaturaWithUser) => {
+    setSelectedFatura(fatura);
+    paymentForm.reset({
+      numeroRecibo: "",
+      referencia: "",
+    });
+    setIsPaymentDialogOpen(true);
+  };
+
+  const estadoColors: Record<string, string> = {
+    futuro: "bg-muted text-muted-foreground",
     pendente: "bg-chart-3 text-white",
-    atrasado: "bg-destructive text-destructive-foreground",
+    em_divida: "bg-destructive text-destructive-foreground",
+    paga: "bg-chart-2 text-white",
+    cancelada: "bg-muted text-muted-foreground",
   };
 
-  const statusLabels = {
-    pago: "Pago",
+  const estadoLabels: Record<string, string> = {
+    futuro: "Futura",
     pendente: "Pendente",
-    atrasado: "Atrasado",
+    em_divida: "Em Dívida",
+    paga: "Paga",
+    cancelada: "Cancelada",
   };
 
-  const filteredMensalidades = mensalidades.filter((m) => {
+  const filteredFaturas = faturas.filter((f) => {
     if (selectedTab === "todas") return true;
-    if (selectedTab === "pagas") return m.status === "pago";
-    if (selectedTab === "pendentes") return m.status === "pendente";
-    if (selectedTab === "atrasadas") return m.status === "atrasado";
+    if (selectedTab === "pendentes") return f.estado === "pendente";
+    if (selectedTab === "pagas") return f.estado === "paga";
+    if (selectedTab === "atrasadas") return f.estado === "em_divida";
+    if (selectedTab === "futuras") return f.estado === "futuro";
     return true;
   });
 
@@ -245,16 +226,16 @@ export default function Financeiro() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Financeiro</h1>
-          <p className="text-muted-foreground mt-1">Gerir mensalidades e pagamentos</p>
+          <p className="text-muted-foreground mt-1">Sistema de faturas automáticas</p>
         </div>
-        <Button onClick={() => handleOpenDialog()} data-testid="button-new-payment">
-          <Plus className="h-4 w-4 mr-2" />
-          Nova Mensalidade
+        <Button onClick={() => setIsGenerateDialogOpen(true)} data-testid="button-generate-invoices">
+          <Wand2 className="h-4 w-4 mr-2" />
+          Gerar Faturas Anuais
         </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        {isStatsLoading ? (
+        {isFaturasLoading ? (
           <>
             <Skeleton className="h-32" />
             <Skeleton className="h-32" />
@@ -269,8 +250,11 @@ export default function Financeiro() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold font-mono" data-testid="stat-revenue-received">
-                  €{stats?.totalReceita.toFixed(2) || "0.00"}
+                  €{stats.totalReceita.toFixed(2)}
                 </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {stats.countPagas} faturas pagas
+                </p>
               </CardContent>
             </Card>
 
@@ -281,10 +265,10 @@ export default function Financeiro() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold font-mono" data-testid="stat-revenue-pending">
-                  €{stats?.totalPendente.toFixed(2) || "0.00"}
+                  €{stats.totalPendente.toFixed(2)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {stats?.countPendentes || 0} pagamentos
+                  {stats.countPendentes} faturas pendentes
                 </p>
               </CardContent>
             </Card>
@@ -296,10 +280,10 @@ export default function Financeiro() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold font-mono" data-testid="stat-revenue-overdue">
-                  €{stats?.totalAtrasado.toFixed(2) || "0.00"}
+                  €{stats.totalAtrasado.toFixed(2)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {stats?.countAtrasadas || 0} pagamentos
+                  {stats.countAtrasadas} faturas em dívida
                 </p>
               </CardContent>
             </Card>
@@ -310,127 +294,267 @@ export default function Financeiro() {
       <Tabs value={selectedTab} onValueChange={(v) => setSelectedTab(v as any)} className="space-y-4">
         <TabsList>
           <TabsTrigger value="todas" data-testid="tab-all">Todas</TabsTrigger>
-          <TabsTrigger value="pagas" data-testid="tab-paid">Pagas</TabsTrigger>
           <TabsTrigger value="pendentes" data-testid="tab-pending">Pendentes</TabsTrigger>
+          <TabsTrigger value="pagas" data-testid="tab-paid">Pagas</TabsTrigger>
           <TabsTrigger value="atrasadas" data-testid="tab-overdue">Atrasadas</TabsTrigger>
+          <TabsTrigger value="futuras" data-testid="tab-future">Futuras</TabsTrigger>
+          <TabsTrigger value="config" data-testid="tab-config">Configuração</TabsTrigger>
         </TabsList>
 
-        <TabsContent value={selectedTab} className="space-y-4">
-          {isMensalidadesLoading ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              <Skeleton className="h-48" />
-              <Skeleton className="h-48" />
-              <Skeleton className="h-48" />
-            </div>
-          ) : filteredMensalidades.length === 0 ? (
+        {/* Tabs de Faturas - reutilizável para todas, pendentes, pagas, atrasadas, futuras */}
+        {["todas", "pendentes", "pagas", "atrasadas", "futuras"].map((tabValue) => (
+          <TabsContent key={tabValue} value={tabValue} className="space-y-4">
+            {isFaturasLoading ? (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <Skeleton className="h-48" />
+                <Skeleton className="h-48" />
+                <Skeleton className="h-48" />
+              </div>
+            ) : filteredFaturas.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+                  <p className="text-lg font-medium">Nenhuma fatura encontrada</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Gere faturas anuais para começar
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {filteredFaturas.map((fatura) => (
+                  <Card key={fatura.id} className="hover-elevate" data-testid={`invoice-${fatura.id}`}>
+                    <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-base" data-testid={`invoice-${fatura.id}-athlete`}>
+                            {fatura.userName}
+                          </h3>
+                          {fatura.userNumeroSocio && (
+                            <span className="text-xs text-muted-foreground">
+                              #{fatura.userNumeroSocio}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {fatura.descricao || `Mensalidade ${fatura.mesReferencia}/${fatura.anoReferencia}`}
+                        </p>
+                        {fatura.numero && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Fatura nº {fatura.numero}
+                          </p>
+                        )}
+                      </div>
+                      <Badge className={estadoColors[fatura.estado]} data-testid={`invoice-${fatura.id}-status`}>
+                        {estadoLabels[fatura.estado]}
+                      </Badge>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Euro className="h-4 w-4" />
+                        <span className="font-mono font-semibold text-foreground" data-testid={`invoice-${fatura.id}-amount`}>
+                          €{parseFloat(fatura.valorTotal).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="h-4 w-4" />
+                        <span>Venc: {format(new Date(fatura.dataVencimento), "dd/MM/yyyy", { locale: pt })}</span>
+                      </div>
+                      {fatura.dataPagamento && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Check className="h-4 w-4" />
+                          <span>Pago: {format(new Date(fatura.dataPagamento), "dd/MM/yyyy", { locale: pt })}</span>
+                        </div>
+                      )}
+                      {fatura.numeroRecibo && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Receipt className="h-4 w-4" />
+                          <span>Recibo: {fatura.numeroRecibo}</span>
+                        </div>
+                      )}
+                      {(fatura.estado === "pendente" || fatura.estado === "em_divida") && (
+                        <div className="pt-2 border-t">
+                          <Button 
+                            size="sm" 
+                            className="w-full"
+                            onClick={() => handleOpenPaymentDialog(fatura)}
+                            data-testid={`invoice-${fatura.id}-pay`}
+                          >
+                            <Check className="h-4 w-4 mr-2" />
+                            Marcar como Pago
+                          </Button>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        ))}
+
+        <TabsContent value="config" className="space-y-6">
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Tipos de Mensalidade */}
             <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <Euro className="h-12 w-12 text-muted-foreground mb-4" />
-                <p className="text-lg font-medium">Nenhuma mensalidade encontrada</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Adicione a primeira mensalidade
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Layers className="h-5 w-5 text-muted-foreground" />
+                  <h3 className="text-lg font-semibold">Tipos de Mensalidade</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Valores e configurações de mensalidades
                 </p>
+              </CardHeader>
+              <CardContent>
+                {isTiposLoading ? (
+                  <div className="space-y-3">
+                    <Skeleton className="h-20" />
+                    <Skeleton className="h-20" />
+                  </div>
+                ) : tiposMensalidade.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-muted-foreground">
+                      Nenhum tipo de mensalidade configurado
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {tiposMensalidade.map((tipo) => (
+                      <div 
+                        key={tipo.id} 
+                        className="p-4 border rounded-md hover-elevate"
+                        data-testid={`tipo-mensalidade-${tipo.id}`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <h4 className="font-semibold" data-testid={`tipo-${tipo.id}-name`}>
+                              {tipo.nome}
+                            </h4>
+                            {tipo.descricao && (
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {tipo.descricao}
+                              </p>
+                            )}
+                            {tipo.escalaoId && (
+                              <Badge variant="outline" className="mt-2">
+                                Escalão ID: {tipo.escalaoId}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <div className="font-mono font-semibold text-lg" data-testid={`tipo-${tipo.id}-value`}>
+                              €{parseFloat(tipo.valorMensal).toFixed(2)}
+                            </div>
+                            <p className="text-xs text-muted-foreground">por mês</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {filteredMensalidades.map((mensalidade) => (
-                <Card key={mensalidade.id} className="hover-elevate" data-testid={`finance-${mensalidade.id}`}>
-                  <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-3">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-base" data-testid={`finance-${mensalidade.id}-athlete`}>
-                        {mensalidade.pessoaNome}
-                      </h3>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {mensalidade.descricao || `Mensalidade ${mensalidade.mes}/${mensalidade.ano}`}
-                      </p>
-                    </div>
-                    <Badge className={statusColors[mensalidade.status as keyof typeof statusColors]} data-testid={`finance-${mensalidade.id}-status`}>
-                      {statusLabels[mensalidade.status as keyof typeof statusLabels]}
-                    </Badge>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Euro className="h-4 w-4" />
-                      <span className="font-mono font-semibold text-foreground" data-testid={`finance-${mensalidade.id}-amount`}>
-                        €{Number(mensalidade.valor).toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Calendar className="h-4 w-4" />
-                      <span>Vencimento: {format(new Date(mensalidade.dataVencimento), "dd/MM/yyyy", { locale: pt })}</span>
-                    </div>
-                    {mensalidade.dataPagamento && (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Check className="h-4 w-4" />
-                        <span>Pago em: {format(new Date(mensalidade.dataPagamento), "dd/MM/yyyy", { locale: pt })}</span>
+
+            {/* Centros de Custo */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-5 w-5 text-muted-foreground" />
+                  <h3 className="text-lg font-semibold">Centros de Custo</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Distribuição de custos por escalão/departamento
+                </p>
+              </CardHeader>
+              <CardContent>
+                {isCentrosLoading ? (
+                  <div className="space-y-3">
+                    <Skeleton className="h-20" />
+                    <Skeleton className="h-20" />
+                  </div>
+                ) : centrosCusto.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-muted-foreground">
+                      Nenhum centro de custo configurado
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {centrosCusto.map((centro) => (
+                      <div 
+                        key={centro.id} 
+                        className="p-4 border rounded-md hover-elevate"
+                        data-testid={`centro-custo-${centro.id}`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <h4 className="font-semibold" data-testid={`centro-${centro.id}-name`}>
+                              {centro.nome}
+                            </h4>
+                            {centro.descricao && (
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {centro.descricao}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-2 mt-2">
+                              <Badge variant="outline">
+                                {centro.tipo}
+                              </Badge>
+                              {centro.escalaoId && (
+                                <Badge variant="outline">
+                                  Escalão ID: {centro.escalaoId}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                          {centro.percentualAlocacao !== null && (
+                            <div className="text-right">
+                              <div className="font-mono font-semibold text-lg" data-testid={`centro-${centro.id}-percentage`}>
+                                {parseFloat(centro.percentualAlocacao).toFixed(1)}%
+                              </div>
+                              <p className="text-xs text-muted-foreground">alocação</p>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    )}
-                    <div className="flex items-center justify-between gap-2 pt-2 border-t">
-                      <div className="flex gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => handleOpenDialog(mensalidade)}
-                          data-testid={`finance-${mensalidade.id}-edit`}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => deleteMutation.mutate(mensalidade.id)}
-                          data-testid={`finance-${mensalidade.id}-delete`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      {mensalidade.status === "pendente" && (
-                        <Button 
-                          size="sm" 
-                          onClick={() => markAsPaidMutation.mutate(mensalidade)}
-                          data-testid={`finance-${mensalidade.id}-pay`}
-                        >
-                          Marcar como Pago
-                        </Button>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]" data-testid="dialog-mensalidade">
+      {/* Dialog para gerar faturas anuais */}
+      <Dialog open={isGenerateDialogOpen} onOpenChange={setIsGenerateDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]" data-testid="dialog-generate-invoices">
           <DialogHeader>
-            <DialogTitle>
-              {editingMensalidade ? "Editar Mensalidade" : "Nova Mensalidade"}
-            </DialogTitle>
+            <DialogTitle>Gerar Faturas Anuais</DialogTitle>
+            <DialogDescription>
+              Gera automaticamente 11 faturas mensais (Setembro a Julho) para um atleta
+            </DialogDescription>
           </DialogHeader>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+          <Form {...generateForm}>
+            <form onSubmit={generateForm.handleSubmit(handleGenerateInvoices)} className="space-y-4">
               <FormField
-                control={form.control}
-                name="pessoaId"
+                control={generateForm.control}
+                name="userId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Pessoa</FormLabel>
-                    <Select
-                      onValueChange={(value) => field.onChange(parseInt(value))}
-                      value={field.value?.toString() || ""}
-                    >
+                    <FormLabel>Atleta</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <SelectTrigger data-testid="input-pessoa">
-                          <SelectValue placeholder="Selecione uma pessoa" />
+                        <SelectTrigger data-testid="input-athlete">
+                          <SelectValue placeholder="Selecione um atleta" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {pessoas.map((pessoa) => (
-                          <SelectItem key={pessoa.id} value={pessoa.id.toString()}>
-                            {pessoa.nome}
+                        {users.map((user) => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.name || `${user.firstName} ${user.lastName}`}
+                            {user.numeroSocio && ` (#${user.numeroSocio})`}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -440,136 +564,35 @@ export default function Financeiro() {
                 )}
               />
 
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="valor"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Valor (€)</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="number" 
-                          step="0.01" 
-                          placeholder="45.00" 
-                          {...field}
-                          data-testid="input-valor"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Status</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="input-status">
-                            <SelectValue placeholder="Selecione o status" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="pago">Pago</SelectItem>
-                          <SelectItem value="pendente">Pendente</SelectItem>
-                          <SelectItem value="atrasado">Atrasado</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="mes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Mês</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="number" 
-                          min="1" 
-                          max="12" 
-                          {...field}
-                          onChange={(e) => field.onChange(parseInt(e.target.value))}
-                          data-testid="input-mes"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="ano"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Ano</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="number" 
-                          min="2020" 
-                          {...field}
-                          onChange={(e) => field.onChange(parseInt(e.target.value))}
-                          data-testid="input-ano"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="dataVencimento"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Data de Vencimento</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} data-testid="input-data-vencimento" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="dataPagamento"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Data de Pagamento (opcional)</FormLabel>
-                      <FormControl>
-                        <Input type="date" {...field} value={field.value || ""} data-testid="input-data-pagamento" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
               <FormField
-                control={form.control}
-                name="descricao"
+                control={generateForm.control}
+                name="epoca"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Descrição (opcional)</FormLabel>
+                    <FormLabel>Época</FormLabel>
                     <FormControl>
-                      <Textarea 
-                        placeholder="Mensalidade de outubro 2025" 
+                      <Input 
+                        placeholder="2024/2025" 
                         {...field}
-                        value={field.value || ""}
-                        data-testid="input-descricao"
+                        data-testid="input-season"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={generateForm.control}
+                name="dataInicio"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Data de Início</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="date" 
+                        {...field}
+                        data-testid="input-start-date"
                       />
                     </FormControl>
                     <FormMessage />
@@ -581,17 +604,86 @@ export default function Financeiro() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setIsDialogOpen(false)}
+                  onClick={() => setIsGenerateDialogOpen(false)}
                   data-testid="button-cancel"
                 >
                   Cancelar
                 </Button>
                 <Button 
                   type="submit" 
-                  disabled={saveMutation.isPending}
-                  data-testid="button-save"
+                  disabled={generateInvoicesMutation.isPending}
+                  data-testid="button-generate"
                 >
-                  {saveMutation.isPending ? "A guardar..." : editingMensalidade ? "Atualizar" : "Criar"}
+                  {generateInvoicesMutation.isPending ? "A gerar..." : "Gerar Faturas"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para marcar fatura como paga */}
+      <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]" data-testid="dialog-payment">
+          <DialogHeader>
+            <DialogTitle>Registar Pagamento</DialogTitle>
+            <DialogDescription>
+              Marcar fatura como paga e registar dados do recibo
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...paymentForm}>
+            <form onSubmit={paymentForm.handleSubmit(handleMarkAsPaid)} className="space-y-4">
+              <FormField
+                control={paymentForm.control}
+                name="numeroRecibo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Número do Recibo</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="REC-2024-001" 
+                        {...field}
+                        data-testid="input-receipt-number"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={paymentForm.control}
+                name="referencia"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Referência de Pagamento (opcional)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="MB12345678" 
+                        {...field}
+                        data-testid="input-payment-reference"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsPaymentDialogOpen(false)}
+                  data-testid="button-cancel-payment"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={markAsPaidMutation.isPending}
+                  data-testid="button-confirm-payment"
+                >
+                  {markAsPaidMutation.isPending ? "A guardar..." : "Confirmar Pagamento"}
                 </Button>
               </DialogFooter>
             </form>
