@@ -18,15 +18,17 @@ O documento PDF especifica uma estrutura de base de dados **significativamente m
 **✅ Campos já existentes:**
 - id, email, firstName, lastName, profileImageUrl, createdAt, updatedAt
 
-**❌ Campos em falta (do PDF):**
+**❌ Campos em falta (do PDF + Lógica de Negócio):**
 ```
-numero_socio, estado, name, mensalidade_id(FK), email_verified_at, 
-password, remember_token, role, nif, cartao_cidadao, contacto, 
-data_nascimento, sexo, morada, codigo_postal, localidade, empresa, 
-escola, estado_civil, ocupacao, nacionalidade, numero_irmaos, 
-menor, estado_utilizador, encarregado_id(FK), escalao_id(FK), 
+numero_socio, estado, name, tipo_mensalidade_id(FK→mensalidades), 
+email_verified_at, password, remember_token, role, nif, cartao_cidadao, 
+contacto, data_nascimento, sexo, morada, codigo_postal, localidade, 
+empresa, escola, estado_civil, ocupacao, nacionalidade, numero_irmaos, 
+menor, estado_utilizador, encarregado_id(FK→users), escalao_id(FK→escaloes), 
 profile_photo_path, observacoes_config
 ```
+
+**⚠️ NOTA**: Campo `tipo_mensalidade_id` é crítico para faturação automática
 
 **⚠️ PROBLEMA ARQUITETURAL:**
 - **Atual**: Tabela `pessoas` separada da `users`
@@ -83,7 +85,7 @@ profile_photo_path, observacoes_config
 
 ---
 
-### **2. Escalões - Refinamento**
+### **2. Escalões - Refinamento (Integração com Centros de Custo)**
 
 **Status**: ⚠️ **PARCIALMENTE IMPLEMENTADO**
 
@@ -93,8 +95,14 @@ profile_photo_path, observacoes_config
 **Estrutura em Falta:**
 - ❌ `user_escaloes` (id, user_id FK, escalao_id FK, timestamps) - ligação N:N histórica
 - ⚠️ Campo direto `users.escalao_id` para estado atual
+- ❌ `escaloes.centro_custo_id` (FK → centros_custo) - ligação automática ao centro de custo
 
-**Funcionalidades**: Histórico de mudanças de escalão, estado atual do atleta
+**⚠️ LÓGICA DE NEGÓCIO ESCALÕES:**
+- **Criação Automática de Centro de Custo**: Ao criar escalão, sistema cria automaticamente centro de custo correspondente
+- **Sincronização**: Alterações no nome do escalão atualizam automaticamente o centro de custo
+- **Cálculo de Atletas**: Sistema conta automaticamente nº de atletas por escalão para cálculo de proporções
+
+**Funcionalidades**: Histórico de mudanças de escalão, estado atual do atleta, gestão financeira por escalão
 
 ---
 
@@ -171,14 +179,45 @@ profile_photo_path, observacoes_config
 - ✅ `mensalidades` (id, designacao, valor) - **JÁ EXISTE mas simplificada**
 - ❌ `dados_financeiros` (id, user_id, estado_pagamento, numero_recibo, referencia_pagamento, mensalidade_id)
 
-### **2. Faturação**
-- ❌ `faturas` (id, user_id, data_fatura, mes YYYY-MM UNIQUE, data_emissao, valor, estado_pagamento, numero_recibo, referencia_pagamento)
+### **2. Faturação (com Geração Automática)**
+- ❌ `faturas` (id, user_id, data_fatura, mes YYYY-MM UNIQUE, data_emissao, valor, estado_pagamento, numero_recibo, referencia_pagamento, gerada_automaticamente, epoca)
 - ❌ `fatura_itens` (id, fatura_id, descricao, valor_unitario, quantidade, imposto_percentual, total_linha, dados_financeiros_id)
 - ❌ `catalogo_fatura_itens` (id, descricao, valor_unitario, imposto_percentual) - itens pré-definidos
 
-### **3. Contabilidade Analítica**
-- ❌ `centros_custo` (id, nome, tipo [equipa|departamento|pessoa], referencia_externa, ativo)
+**⚠️ LÓGICA DE FATURAÇÃO AUTOMÁTICA:**
+
+**Opção 1 - Geração Mensal:**
+- Sistema gera faturas automaticamente no início de cada mês
+- Baseado no tipo de mensalidade definido no perfil do utilizador/atleta
+- Valor e itens copiados do perfil de mensalidade do atleta
+
+**Opção 2 - Geração Total na Inscrição (RECOMENDADA):**
+- Ao registar atleta, sistema gera TODAS as faturas desde o mês de registo até Julho (fim época)
+- Faturas ficam com estado "futuro" ou "pendente"
+- Quando o mês chega, fatura muda automaticamente para "em dívida" se não paga
+- Vantagens: 
+  - Visibilidade total do ano letivo
+  - Facilita planeamento financeiro
+  - Permite pagamentos antecipados
+  - Gestão de descontos anuais
+
+**Campos Adicionais Necessários:**
+- `users.tipo_mensalidade_id` (FK → mensalidades) - define mensalidade do atleta
+- `faturas.mes_referencia` (YYYY-MM) - mês a que se refere a fatura
+- `faturas.estado` (futuro|pendente|em_divida|paga|cancelada)
+- `faturas.data_vencimento` - quando deve ser paga
+- `faturas.gerada_automaticamente` (boolean) - distinguir de faturas manuais
+
+### **3. Contabilidade Analítica (Centros de Custo)**
+- ❌ `centros_custo` (id, nome, tipo [escalao|departamento|clube_generico], referencia_externa, escalao_id FK opcional, ativo, percentagem_distribuicao)
 - ❌ `lancamentos_financeiros` (id, data, descricao, tipo [receita|despesa], valor, metodo_pagamento, documento_ref, user_id, centro_custo_id, fatura_id)
+
+**⚠️ LÓGICA DE NEGÓCIO CENTROS DE CUSTO:**
+- **Escalões como Centros de Custo**: Cada escalão é automaticamente um centro de custo
+- **Mensalidades Afetadas**: Mensalidades de atletas ficam afetas ao centro de custo do seu escalão
+- **Centro de Custo Genérico**: Clube tem centro de custo genérico que dilui despesas/lucros pelos outros centros proporcionalmente ao nº de atletas
+- **Departamentos**: Desportivo, Administrativo, Financeiro são também centros de custo
+- **Distribuição Automática**: Sistema calcula proporções baseado em nº de atletas por escalão
 
 ### **4. Conciliação Bancária**
 - ❌ `extratos_bancarios` (id, conta, data_movimento, descricao, valor, saldo, referencia, ficheiro_id, conciliado, lancamento_id)
@@ -242,6 +281,68 @@ profile_photo_path, observacoes_config
 - `calendario_publico` - *pode expor de eventos com flag visibilidade=publico*
 
 **Funcionalidades**: CMS para site público, gestão de conteúdos, calendário de eventos
+
+---
+
+## 💡 Lógica de Negócio Crítica - Resumo
+
+### **Sistema de Centros de Custo Integrado**
+
+**Estrutura:**
+1. **Escalões = Centros de Custo**
+   - Cada escalão cria automaticamente um centro de custo
+   - Mensalidades dos atletas afetadas ao centro de custo do escalão
+   - Permite análise financeira por escalão
+
+2. **Departamentos = Centros de Custo**
+   - Desportivo, Administrativo, Financeiro
+   - Recebem despesas específicas do departamento
+
+3. **Centro de Custo Genérico (Clube)**
+   - Despesas não específicas (água, luz, seguros, etc.)
+   - Distribuídas proporcionalmente por nº de atletas em cada escalão
+   - Cálculo automático das proporções
+
+**Fluxo de Trabalho:**
+```
+1. Criar Escalão → Sistema cria Centro de Custo automaticamente
+2. Atleta inscreve-se no Escalão → Mensalidade afeta ao Centro de Custo do Escalão
+3. Despesa genérica lançada → Sistema distribui proporcionalmente pelos escalões
+4. Relatórios mostram: Receitas vs Despesas por Escalão/Departamento
+```
+
+**Cálculos Automáticos:**
+- Proporção por escalão = (Nº atletas escalão / Total atletas) × 100%
+- Despesa distribuída = Valor total × Proporção do escalão
+- Resultado por escalão = Receitas escalão - (Despesas escalão + Despesas distribuídas)
+
+---
+
+### **Faturação Automática**
+
+**Sistema Recomendado: Geração Total no Registo**
+
+**Fluxo:**
+1. **No Registo do Atleta:**
+   - Sistema lê `users.tipo_mensalidade_id`
+   - Gera faturas mensais desde mês atual até Julho
+   - Cada fatura fica com estado "futuro"
+
+2. **Transição Mensal Automática (Cronjob):**
+   - Dia 1 de cada mês: sistema verifica faturas
+   - Faturas do mês atual mudam para "em_divida" se não pagas
+   - Envia notificações automáticas
+
+3. **Pagamentos:**
+   - Pode pagar adiantado (desconto possível)
+   - Pode pagar mês a mês
+   - Sistema atualiza automaticamente centro de custo
+
+**Vantagens:**
+- ✅ Visibilidade financeira total do ano
+- ✅ Planeamento de tesouraria
+- ✅ Permite descontos anuais
+- ✅ Histórico completo desde início
 
 ---
 
@@ -318,16 +419,21 @@ profile_photo_path, observacoes_config
 3. ✅ Implementar RBAC básico
 4. ✅ Adicionar tabela `dados_configuracao` (RGPD)
 
-### **Fase 2 - Refinamento Módulos Existentes**
-5. ✅ Expandir Escalões (user_escaloes N:N)
+### **Fase 2 - Refinamento Módulos Existentes + Lógica de Negócio**
+5. ✅ Expandir Escalões (user_escaloes N:N) + Integração Centros de Custo
+   - Criação automática de centro de custo ao criar escalão
+   - Sincronização automática
 6. ✅ Adicionar Dados Desportivos (dados_desportivos, saude_atletas)
 7. ✅ Adicionar Resultados a Treinos
 8. ✅ Refinar Eventos (eventos_tipos, evento_escalao, eventos_users, convocatorias)
-9. ✅ Expandir Financeiro:
+9. ✅ Expandir Financeiro (8 tabelas + Lógica Complexa):
    - dados_financeiros
    - faturas + fatura_itens + catalogo_fatura_itens
-   - centros_custo + lancamentos_financeiros
+   - centros_custo (escalões, departamentos, genérico)
+   - lancamentos_financeiros (com distribuição automática)
    - extratos_bancarios + mapa_conciliacao
+   - **Lógica de Faturação Automática** (geração no registo, transições mensais)
+   - **Lógica de Centros de Custo** (distribuição proporcional, cálculos automáticos)
 
 ### **Fase 3 - Novos Módulos**
 10. ✅ Patrocínios (contratos, parcelas, métricas)
@@ -341,15 +447,21 @@ profile_photo_path, observacoes_config
 
 ---
 
-## ⏱️ Estimativa de Esforço
+## ⏱️ Estimativa de Esforço (Atualizada com Lógica de Negócio)
 
-| Fase | Tarefas | Tempo Estimado | Risco |
-|------|---------|----------------|-------|
-| Fase 1 | 4 tarefas | ~2-3h | 🟢 Baixo |
-| Fase 2 | 5 tarefas | ~4-6h | 🟡 Médio |
-| Fase 3 | 4 tarefas | ~5-7h | 🟡 Médio |
-| Fase 4 | 2 tarefas | ~2-4h | 🔴 Alto |
-| **TOTAL** | **15 tarefas** | **~13-20h** | - |
+| Fase | Tarefas | Tempo Estimado | Risco | Complexidade |
+|------|---------|----------------|-------|--------------|
+| Fase 1 | 4 tarefas | ~2-3h | 🟢 Baixo | Setup base |
+| Fase 2 | 5 tarefas + Lógica | ~6-9h | 🔴 Alto | Centros custo + Faturação automática |
+| Fase 3 | 4 tarefas | ~5-7h | 🟡 Médio | Novos módulos |
+| Fase 4 | 2 tarefas | ~2-4h | 🔴 Alto | Consolidação final |
+| **TOTAL** | **15 tarefas** | **~15-23h** | - | - |
+
+**⚠️ Nota**: Fase 2 é crítica e complexa devido a:
+- Criação automática de centros de custo ao criar escalões
+- Distribuição proporcional de despesas genéricas
+- Faturação automática (geração em massa + transições mensais)
+- Cálculos financeiros complexos
 
 ---
 
@@ -385,11 +497,19 @@ profile_photo_path, observacoes_config
    - Migrar para RBAC e depreciar
    - Ignorar (assumir não há dados históricos)
 
-4. **Prioridade dos novos módulos?**
-   - Todos de uma vez (13-20h trabalho)
+4. **Sistema de Faturação Automática?**
+   - Opção 1: Geração mensal (no início de cada mês)
+   - Opção 2: Geração total no registo (recomendada - melhor visibilidade)
+
+5. **Centros de Custo - Departamentos Fixos?**
+   - Confirmar: Desportivo, Administrativo, Financeiro
+   - Ou: Permitir criar departamentos personalizados
+
+6. **Prioridade dos novos módulos?**
+   - Todos de uma vez (15-25h trabalho com lógica de negócio)
    - Faseado (escolher prioridades)
 
-5. **Dados de teste existentes podem ser perdidos?**
+7. **Dados de teste existentes podem ser perdidos?**
    - Sim: migração mais rápida
    - Não: requer backup e migração cuidadosa
 
