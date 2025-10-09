@@ -68,6 +68,7 @@ export const pessoas = pgTable("pessoas", {
   dataNascimento: date("data_nascimento"),
   nif: varchar("nif", { length: 20 }),
   morada: text("morada"),
+  observacoes: text("observacoes"),
   ativo: boolean("ativo").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
