@@ -23,10 +23,28 @@ The application uses React with TypeScript for the frontend, Express.js for the 
 - ✅ All foreign keys configured and schema synchronized
 - ✅ TypeScript compilation validated
 
-**Next Steps:**
-- Data migration from legacy pessoas to expanded users table
-- Implement automatic cost center distribution logic
-- Implement automatic invoice generation system
+**Latest Implementation (October 2025):**
+- ✅ Data migration completed: pessoas → users (1 record migrated successfully)
+- ✅ Automatic cost center distribution logic implemented and tested
+- ✅ Automatic invoice generation system fully operational
+
+**Business Logic Implemented:**
+
+**1. Cost Center Distribution System:**
+- Automatic creation of cost centers for each escalão
+- "Clube Genérico" center for non-specific expenses
+- Function: `calcular_distribuicao_centros_custo()` - calculates proportional distribution based on active athletes
+- Function: `distribuir_despesa_por_escaloes(valor, descricao, data)` - distributes expenses across escalões
+- Trigger: `trigger_recalcular_distribuicao` - auto-recalculates when users change escalão/status
+- Current distribution: Master 100% (1 athlete)
+
+**2. Automatic Invoice Generation System:**
+- Function: `gerar_faturas_anuais(user_id, epoca, data_inicio)` - generates 11 monthly invoices (Sep-Jul)
+- Function: `atualizar_estados_faturas()` - automatic state transitions (futuro → pendente → em_divida)
+- Function: `marcar_fatura_paga(fatura_id, recibo, referencia)` - marks invoice as paid
+- Invoice states: futuro, pendente, em_divida, paga, cancelada
+- Automatic invoice items creation with monthly fee
+- Integration with tipos_mensalidade for custom pricing
 
 ## User Preferences
 
