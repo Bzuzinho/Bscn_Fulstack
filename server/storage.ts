@@ -8,6 +8,10 @@ import {
   materiais,
   emprestimos,
   emails,
+  faturas,
+  faturaItens,
+  tiposMensalidade,
+  centrosCusto,
   type User,
   type UpsertUser,
   type Pessoa,
@@ -26,16 +30,51 @@ import {
   type InsertEmprestimo,
   type Email,
   type InsertEmail,
+  type Fatura,
+  type TipoMensalidade,
+  type CentroCusto,
+  insertFaturaSchema,
+  insertTipoMensalidadeSchema,
+  insertCentroCustoSchema,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, and, sql as drizzleSql } from "drizzle-orm";
+import { z } from "zod";
 
 export interface IStorage {
   // User operations (mandatory for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
+  getUsers(filters?: { escalaoId?: number; estado?: string }): Promise<User[]>;
+  updateUser(id: string, user: Partial<UpsertUser>): Promise<User | undefined>;
+  deleteUser(id: string): Promise<void>;
 
-  // Pessoas operations
+  // Faturas operations
+  getFaturas(userId?: string): Promise<Fatura[]>;
+  getFaturasWithUser(userId?: string): Promise<any[]>;
+  getFatura(id: number): Promise<Fatura | undefined>;
+  getFaturaWithUser(id: number): Promise<any>;
+  createFatura(fatura: z.infer<typeof insertFaturaSchema>): Promise<Fatura>;
+  updateFatura(id: number, fatura: Partial<z.infer<typeof insertFaturaSchema>>): Promise<Fatura | undefined>;
+  deleteFatura(id: number): Promise<void>;
+  gerarFaturasAnuais(userId: string, epoca?: string, dataInicio?: string): Promise<any>;
+  marcarFaturaPaga(id: number, numeroRecibo?: string, referencia?: string): Promise<boolean>;
+
+  // Tipos de Mensalidade operations
+  getTiposMensalidade(): Promise<TipoMensalidade[]>;
+  getTipoMensalidade(id: number): Promise<TipoMensalidade | undefined>;
+  createTipoMensalidade(tipo: z.infer<typeof insertTipoMensalidadeSchema>): Promise<TipoMensalidade>;
+  updateTipoMensalidade(id: number, tipo: Partial<z.infer<typeof insertTipoMensalidadeSchema>>): Promise<TipoMensalidade | undefined>;
+  deleteTipoMensalidade(id: number): Promise<void>;
+
+  // Centros de Custo operations
+  getCentrosCusto(): Promise<CentroCusto[]>;
+  getCentroCusto(id: number): Promise<CentroCusto | undefined>;
+  createCentroCusto(centro: z.infer<typeof insertCentroCustoSchema>): Promise<CentroCusto>;
+  updateCentroCusto(id: number, centro: Partial<z.infer<typeof insertCentroCustoSchema>>): Promise<CentroCusto | undefined>;
+  deleteCentroCusto(id: number): Promise<void>;
+
+  // Pessoas operations (LEGACY - will be deprecated)
   getPessoas(): Promise<Pessoa[]>;
   getPessoa(id: number): Promise<Pessoa | undefined>;
   createPessoa(pessoa: InsertPessoa): Promise<Pessoa>;
@@ -114,7 +153,185 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  // Pessoas operations
+  async getUsers(filters?: { escalaoId?: number; estado?: string }): Promise<User[]> {
+    if (!filters || Object.keys(filters).length === 0) {
+      return db.select().from(users);
+    }
+
+    const conditions = [];
+    if (filters.escalaoId) {
+      conditions.push(eq(users.escalaoId, filters.escalaoId));
+    }
+    if (filters.estado) {
+      conditions.push(eq(users.estadoUtilizador, filters.estado as any));
+    }
+
+    if (conditions.length === 0) {
+      return db.select().from(users);
+    }
+
+    return db.select().from(users).where(and(...conditions));
+  }
+
+  async updateUser(id: string, userData: Partial<UpsertUser>): Promise<User | undefined> {
+    const [updated] = await db
+      .update(users)
+      .set({ ...userData, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
+  }
+
+  // Faturas operations
+  async getFaturas(userId?: string): Promise<Fatura[]> {
+    if (userId) {
+      return db.select().from(faturas).where(eq(faturas.userId, userId));
+    }
+    return db.select().from(faturas);
+  }
+
+  async getFaturaWithUser(id: number): Promise<any> {
+    const result = await db
+      .select({
+        fatura: faturas,
+        user: users,
+      })
+      .from(faturas)
+      .leftJoin(users, eq(faturas.userId, users.id))
+      .where(eq(faturas.id, id))
+      .limit(1);
+    
+    if (result.length === 0) return undefined;
+    
+    const { fatura, user } = result[0];
+    return {
+      ...fatura,
+      userName: user?.name || user?.firstName + ' ' + user?.lastName || 'Desconhecido',
+    };
+  }
+
+  async getFaturasWithUser(userId?: string): Promise<any[]> {
+    const query = userId
+      ? db
+          .select({
+            fatura: faturas,
+            user: users,
+          })
+          .from(faturas)
+          .leftJoin(users, eq(faturas.userId, users.id))
+          .where(eq(faturas.userId, userId))
+      : db
+          .select({
+            fatura: faturas,
+            user: users,
+          })
+          .from(faturas)
+          .leftJoin(users, eq(faturas.userId, users.id));
+
+    const results = await query;
+    
+    return results.map(({ fatura, user }) => ({
+      ...fatura,
+      userName: user?.name || user?.firstName + ' ' + user?.lastName || 'Desconhecido',
+    }));
+  }
+
+  async getFatura(id: number): Promise<Fatura | undefined> {
+    const [fatura] = await db.select().from(faturas).where(eq(faturas.id, id));
+    return fatura;
+  }
+
+  async createFatura(faturaData: z.infer<typeof insertFaturaSchema>): Promise<Fatura> {
+    const [fatura] = await db.insert(faturas).values(faturaData).returning();
+    return fatura;
+  }
+
+  async updateFatura(id: number, faturaData: Partial<z.infer<typeof insertFaturaSchema>>): Promise<Fatura | undefined> {
+    const [updated] = await db
+      .update(faturas)
+      .set({ ...faturaData, updatedAt: new Date() })
+      .where(eq(faturas.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteFatura(id: number): Promise<void> {
+    await db.delete(faturas).where(eq(faturas.id, id));
+  }
+
+  async gerarFaturasAnuais(userId: string, epoca?: string, dataInicio?: string): Promise<any> {
+    const query = drizzleSql`SELECT * FROM gerar_faturas_anuais(${userId}, ${epoca || null}, ${dataInicio ? drizzleSql`${dataInicio}::DATE` : null})`;
+    const result = await db.execute(query);
+    return result.rows;
+  }
+
+  async marcarFaturaPaga(id: number, numeroRecibo?: string, referencia?: string): Promise<boolean> {
+    const query = drizzleSql`SELECT marcar_fatura_paga(${id}, ${numeroRecibo || null}, ${referencia || null})`;
+    const result = await db.execute(query);
+    return true;
+  }
+
+  // Tipos de Mensalidade operations
+  async getTiposMensalidade(): Promise<TipoMensalidade[]> {
+    return db.select().from(tiposMensalidade);
+  }
+
+  async getTipoMensalidade(id: number): Promise<TipoMensalidade | undefined> {
+    const [tipo] = await db.select().from(tiposMensalidade).where(eq(tiposMensalidade.id, id));
+    return tipo;
+  }
+
+  async createTipoMensalidade(tipoData: z.infer<typeof insertTipoMensalidadeSchema>): Promise<TipoMensalidade> {
+    const [tipo] = await db.insert(tiposMensalidade).values(tipoData).returning();
+    return tipo;
+  }
+
+  async updateTipoMensalidade(id: number, tipoData: Partial<z.infer<typeof insertTipoMensalidadeSchema>>): Promise<TipoMensalidade | undefined> {
+    const [updated] = await db
+      .update(tiposMensalidade)
+      .set({ ...tipoData, updatedAt: new Date() })
+      .where(eq(tiposMensalidade.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteTipoMensalidade(id: number): Promise<void> {
+    await db.delete(tiposMensalidade).where(eq(tiposMensalidade.id, id));
+  }
+
+  // Centros de Custo operations
+  async getCentrosCusto(): Promise<CentroCusto[]> {
+    return db.select().from(centrosCusto);
+  }
+
+  async getCentroCusto(id: number): Promise<CentroCusto | undefined> {
+    const [centro] = await db.select().from(centrosCusto).where(eq(centrosCusto.id, id));
+    return centro;
+  }
+
+  async createCentroCusto(centroData: z.infer<typeof insertCentroCustoSchema>): Promise<CentroCusto> {
+    const [centro] = await db.insert(centrosCusto).values(centroData).returning();
+    return centro;
+  }
+
+  async updateCentroCusto(id: number, centroData: Partial<z.infer<typeof insertCentroCustoSchema>>): Promise<CentroCusto | undefined> {
+    const [updated] = await db
+      .update(centrosCusto)
+      .set({ ...centroData, updatedAt: new Date() })
+      .where(eq(centrosCusto.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCentroCusto(id: number): Promise<void> {
+    await db.delete(centrosCusto).where(eq(centrosCusto.id, id));
+  }
+
+  // Pessoas operations (LEGACY - will be deprecated)
   async getPessoas(): Promise<Pessoa[]> {
     return db.select().from(pessoas);
   }

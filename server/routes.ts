@@ -2,7 +2,17 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertEscalaoSchema, insertPessoaSchema, insertAtividadeSchema, insertPresencaSchema, insertMensalidadeSchema } from "@shared/schema";
+import {
+  insertEscalaoSchema,
+  insertPessoaSchema,
+  insertAtividadeSchema,
+  insertPresencaSchema,
+  insertMensalidadeSchema,
+  insertFaturaSchema,
+  insertTipoMensalidadeSchema,
+  insertCentroCustoSchema,
+  upsertUserSchema,
+} from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -448,6 +458,208 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting mensalidade:", error);
       res.status(500).json({ message: "Failed to delete mensalidade" });
+    }
+  });
+
+  // Users/Atletas routes (NEW SYSTEM)
+  app.get('/api/users', isAuthenticated, async (req, res) => {
+    try {
+      const filters: any = {};
+      if (req.query.escalaoId) filters.escalaoId = parseInt(req.query.escalaoId as string);
+      if (req.query.estado) filters.estado = req.query.estado;
+      
+      const users = await storage.getUsers(filters);
+      res.json(users);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.get('/api/users/:id', isAuthenticated, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.params.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  app.put('/api/users/:id', isAuthenticated, async (req, res) => {
+    try {
+      const validated = upsertUserSchema.partial().parse(req.body);
+      const user = await storage.updateUser(req.params.id, validated);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      res.json(user);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      console.error("Error updating user:", error);
+      res.status(500).json({ message: "Failed to update user" });
+    }
+  });
+
+  app.delete('/api/users/:id', isAuthenticated, async (req, res) => {
+    try {
+      await storage.deleteUser(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      res.status(500).json({ message: "Failed to delete user" });
+    }
+  });
+
+  // Faturas routes (NEW SYSTEM)
+  app.get('/api/faturas', isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.query.userId as string | undefined;
+      const faturasWithUser = await storage.getFaturasWithUser(userId);
+      res.json(faturasWithUser);
+    } catch (error) {
+      console.error("Error fetching faturas:", error);
+      res.status(500).json({ message: "Failed to fetch faturas" });
+    }
+  });
+
+  app.get('/api/faturas/:id', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const fatura = await storage.getFatura(id);
+      if (!fatura) {
+        return res.status(404).json({ message: "Fatura not found" });
+      }
+      res.json(fatura);
+    } catch (error) {
+      console.error("Error fetching fatura:", error);
+      res.status(500).json({ message: "Failed to fetch fatura" });
+    }
+  });
+
+  app.post('/api/faturas', isAuthenticated, async (req, res) => {
+    try {
+      const validated = insertFaturaSchema.parse(req.body);
+      const fatura = await storage.createFatura(validated);
+      res.status(201).json(fatura);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      console.error("Error creating fatura:", error);
+      res.status(500).json({ message: "Failed to create fatura" });
+    }
+  });
+
+  app.put('/api/faturas/:id', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const validated = insertFaturaSchema.partial().parse(req.body);
+      const fatura = await storage.updateFatura(id, validated);
+      if (!fatura) {
+        return res.status(404).json({ message: "Fatura not found" });
+      }
+      res.json(fatura);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      console.error("Error updating fatura:", error);
+      res.status(500).json({ message: "Failed to update fatura" });
+    }
+  });
+
+  app.delete('/api/faturas/:id', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteFatura(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting fatura:", error);
+      res.status(500).json({ message: "Failed to delete fatura" });
+    }
+  });
+
+  // Generate annual invoices
+  app.post('/api/faturas/gerar-anuais', isAuthenticated, async (req, res) => {
+    try {
+      const { userId, epoca, dataInicio } = req.body;
+      if (!userId) {
+        return res.status(400).json({ message: "userId is required" });
+      }
+      const result = await storage.gerarFaturasAnuais(userId, epoca, dataInicio);
+      res.status(201).json(result);
+    } catch (error) {
+      console.error("Error generating annual faturas:", error);
+      res.status(500).json({ message: "Failed to generate faturas" });
+    }
+  });
+
+  // Mark invoice as paid
+  app.put('/api/faturas/:id/pagar', isAuthenticated, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { numeroRecibo, referenciaPagamento } = req.body;
+      await storage.marcarFaturaPaga(id, numeroRecibo, referenciaPagamento);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error marking fatura as paid:", error);
+      res.status(500).json({ message: "Failed to mark fatura as paid" });
+    }
+  });
+
+  // Tipos de Mensalidade routes
+  app.get('/api/tipos-mensalidade', isAuthenticated, async (req, res) => {
+    try {
+      const tipos = await storage.getTiposMensalidade();
+      res.json(tipos);
+    } catch (error) {
+      console.error("Error fetching tipos mensalidade:", error);
+      res.status(500).json({ message: "Failed to fetch tipos mensalidade" });
+    }
+  });
+
+  app.post('/api/tipos-mensalidade', isAuthenticated, async (req, res) => {
+    try {
+      const validated = insertTipoMensalidadeSchema.parse(req.body);
+      const tipo = await storage.createTipoMensalidade(validated);
+      res.status(201).json(tipo);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      console.error("Error creating tipo mensalidade:", error);
+      res.status(500).json({ message: "Failed to create tipo mensalidade" });
+    }
+  });
+
+  // Centros de Custo routes
+  app.get('/api/centros-custo', isAuthenticated, async (req, res) => {
+    try {
+      const centros = await storage.getCentrosCusto();
+      res.json(centros);
+    } catch (error) {
+      console.error("Error fetching centros custo:", error);
+      res.status(500).json({ message: "Failed to fetch centros custo" });
+    }
+  });
+
+  app.post('/api/centros-custo', isAuthenticated, async (req, res) => {
+    try {
+      const validated = insertCentroCustoSchema.parse(req.body);
+      const centro = await storage.createCentroCusto(validated);
+      res.status(201).json(centro);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      console.error("Error creating centro custo:", error);
+      res.status(500).json({ message: "Failed to create centro custo" });
     }
   });
 
