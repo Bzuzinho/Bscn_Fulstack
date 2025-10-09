@@ -29,7 +29,16 @@ The application uses React with TypeScript for the frontend, Express.js for the 
 - ✅ Automatic invoice generation system fully operational
 - ✅ Dashboard with real-time statistics (athletes, activities, revenue, attendance)
 - ✅ Pessoas page migrated to users table with full CRUD
-- ✅ Empty string sanitization in API endpoints (POST/PUT /api/users)
+- ✅ Empty string sanitization in API endpoints (POST/PUT /api/pessoas)
+- ✅ **Individual User Management System:**
+  - Created detailed user page (/pessoas/:id) with 4-tab interface
+  - Tab 1: Dados Pessoais (complete user profile editing)
+  - Tab 2: Dados Desportivos (sports data, training, results)
+  - Tab 3: Dados Financeiros (invoices, payments, account summary)
+  - Tab 4: Configuração (RGPD consents, permissions, documents)
+  - Navigation: Click on user card → detailed page
+  - API endpoints: /api/pessoas/:id with sub-resources
+  - Fixed schema: escaloes table aligned with database structure
 - ✅ All E2E tests passed successfully
 
 **Business Logic Implemented:**
