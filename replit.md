@@ -2,9 +2,31 @@
 
 ## Overview
 
-This is a comprehensive management system for swimming clubs, built with a modern full-stack architecture. The system manages athletes, activities (training, competitions, camps), financials, inventory, and communications. It's designed for administrators, coaches, and members to efficiently handle all aspects of club operations.
+This is a comprehensive management system for swimming clubs, built with a modern full-stack architecture. The system manages athletes, activities (training, competitions, camps), financials, inventory, sponsorships, sales, marketing, and communications. It's designed for administrators, coaches, and members to efficiently handle all aspects of club operations with support for 80 athletes/year scalable to 240.
 
-The application uses React with TypeScript for the frontend, Express.js for the backend, and PostgreSQL (via Neon) for data persistence. The UI is built with shadcn/ui components following Material Design 3 principles, with support for both light and dark modes.
+The application uses React with TypeScript for the frontend, Express.js for the backend, and PostgreSQL (via Neon) for data persistence. The UI is built with shadcn/ui components following Material Design 3 principles with club branding (navy blue #003366, yellow #FFD700), supporting both light and dark modes.
+
+## Recent Changes (October 2025)
+
+**Major Database Expansion - All Tables Created:**
+- ✅ Expanded users table with ~30 fields (consolidated from pessoas)
+- ✅ Implemented complete RBAC system (5 tables)
+- ✅ Created RGPD compliance module (dados_configuracao)
+- ✅ Expanded Escalões with historical tracking (user_escaloes)
+- ✅ Added Sports & Health data (dados_desportivos, saude_atletas)
+- ✅ Refined Treinos/Presenças with new structure (presencas_novo)
+- ✅ Complete Events system (5 tables: eventos, eventos_tipos, convocatorias, evento_escalao, eventos_users)
+- ✅ Complete Financial module (8 tables) with automatic invoicing and cost centers
+- ✅ Sponsorships module (4 tables: patrocinadores, patrocinios, patrocinio_parcelas, patrocinio_metricas)
+- ✅ Sales & Stock module (4 tables: produtos, movimentos_stock, vendas, venda_itens)
+- ✅ Marketing/Communication module (4 tables: noticias, campanhas, campanha_logs, crm_interacoes)
+- ✅ All foreign keys configured and schema synchronized
+- ✅ TypeScript compilation validated
+
+**Next Steps:**
+- Data migration from legacy pessoas to expanded users table
+- Implement automatic cost center distribution logic
+- Implement automatic invoice generation system
 
 ## User Preferences
 
@@ -69,10 +91,54 @@ Preferred communication style: Simple, everyday language.
 - WebSocket connection pooling for serverless environments
 
 **Schema Design:**
-- Users table (mandatory for Replit Auth integration)
-- Sessions table (mandatory for session storage)
-- Domain tables: pessoas (people), escaloes (age groups), atividades (activities), presencas (attendance), mensalidades (monthly fees), materiais (materials), emprestimos (loans), emails (communications)
+- **Core Auth Tables:**
+  - users: Expanded with ~30 fields (numeroSocio, NIF, contacts, address, personal info, relations)
+  - sessions: PostgreSQL session store for Replit Auth
+  
+- **RBAC System (5 tables):**
+  - roles, permissions
+  - role_has_permissions, model_has_roles, model_has_permissions
+  
+- **RGPD & Compliance:**
+  - dados_configuracao: Consent management, document storage
+  
+- **People & Relations:**
+  - user_escaloes: Historical escalão assignments (N:N)
+  - encarregado_user: Guardian relationships
+  
+- **Sports & Health:**
+  - dados_desportivos: Height, weight, medical certificates, federation data
+  - saude_atletas: Legacy health records
+  
+- **Training & Results:**
+  - treinos: Training sessions
+  - presencas_novo: New attendance structure (user-based)
+  - resultados: Competition results
+  
+- **Events System (5 tables):**
+  - eventos, eventos_tipos, convocatorias
+  - evento_escalao (N:N), eventos_users (N:N with attendance)
+  
+- **Financial Module (8 tables):**
+  - tipos_mensalidade, dados_financeiros
+  - faturas (auto-generation support), fatura_itens, catalogo_fatura_itens
+  - centros_custo (escalões, departments, generic)
+  - lancamentos_financeiros, extratos_bancarios, mapa_conciliacao
+  
+- **Sponsorships (4 tables):**
+  - patrocinadores, patrocinios, patrocinio_parcelas, patrocinio_metricas
+  
+- **Sales & Stock (4 tables):**
+  - produtos, movimentos_stock, vendas, venda_itens
+  
+- **Marketing/Communication (4 tables):**
+  - noticias, campanhas, campanha_logs, crm_interacoes
+  
+- **Legacy Tables (to be deprecated):**
+  - pessoas, atividades, presencas, mensalidades, materiais, emprestimos, emails
+  
 - Zod schemas generated from Drizzle for runtime validation
+- All foreign keys properly configured with cascade/set null policies
 
 **Data Validation:**
 - Drizzle Zod for schema-based validation
