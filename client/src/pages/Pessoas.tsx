@@ -70,7 +70,7 @@ export default function Pessoas() {
   });
 
   const { data: users = [], isLoading: isUsersLoading } = useQuery<User[]>({
-    queryKey: ["/api/users"],
+    queryKey: ["/api/pessoas"],
   });
 
   const { data: escaloes = [] } = useQuery<Escalao[]>({
@@ -79,10 +79,10 @@ export default function Pessoas() {
 
   const saveUserMutation = useMutation({
     mutationFn: async (data: UserFormData) => {
-      await apiRequest("POST", "/api/users", data);
+      await apiRequest("POST", "/api/pessoas", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pessoas"] });
       toast({
         title: "Utilizador criado",
         description: "Novo utilizador adicionado com sucesso.",
@@ -112,10 +112,10 @@ export default function Pessoas() {
 
   const deleteUserMutation = useMutation({
     mutationFn: async (id: string) => {
-      await apiRequest("DELETE", `/api/users/${id}`);
+      await apiRequest("DELETE", `/api/pessoas/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pessoas"] });
       toast({
         title: "Utilizador eliminado",
         description: "Utilizador eliminado com sucesso.",
@@ -223,7 +223,7 @@ export default function Pessoas() {
               <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-3">
                 <div className="flex-1">
                   <h3 className="font-semibold text-base" data-testid={`user-${user.id}-name`}>
-                    {user.name || `${user.firstName} ${user.lastName}`}
+                    {user.name || "Sem nome"}
                   </h3>
                   {user.numeroSocio && (
                     <p className="text-sm text-muted-foreground mt-1">

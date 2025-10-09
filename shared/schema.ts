@@ -187,8 +187,6 @@ export const escaloes = pgTable("escaloes", {
   nome: varchar("nome", { length: 100 }).notNull().unique(),
   descricao: text("descricao"),
   centroCustoId: integer("centro_custo_id").references(() => centrosCusto.id, { onDelete: 'set null' }),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // Historical escalão assignments

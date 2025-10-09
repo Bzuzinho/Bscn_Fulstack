@@ -53,9 +53,9 @@ export default function PessoaDetalhes() {
 
   // Fetch user data
   const { data: user, isLoading: isUserLoading } = useQuery<User>({
-    queryKey: ["/api/users", id],
+    queryKey: ["/api/pessoas", id],
     queryFn: async () => {
-      const response = await fetch(`/api/users/${id}`);
+      const response = await fetch(`/api/pessoas/${id}`);
       if (!response.ok) throw new Error("Failed to fetch user");
       return response.json();
     },
@@ -66,45 +66,45 @@ export default function PessoaDetalhes() {
   });
 
   const { data: dadosDesportivos } = useQuery<DadosDesportivos>({
-    queryKey: ["/api/users", id, "dados-desportivos"],
+    queryKey: ["/api/pessoas", id, "dados-desportivos"],
     queryFn: async () => {
-      const response = await fetch(`/api/users/${id}/dados-desportivos`);
+      const response = await fetch(`/api/pessoas/${id}/dados-desportivos`);
       if (!response.ok) throw new Error("Failed to fetch dados desportivos");
       return response.json();
     },
   });
 
   const { data: dadosConfiguracao } = useQuery<DadosConfiguracao>({
-    queryKey: ["/api/users", id, "dados-configuracao"],
+    queryKey: ["/api/pessoas", id, "dados-configuracao"],
     queryFn: async () => {
-      const response = await fetch(`/api/users/${id}/dados-configuracao`);
+      const response = await fetch(`/api/pessoas/${id}/dados-configuracao`);
       if (!response.ok) throw new Error("Failed to fetch dados configuracao");
       return response.json();
     },
   });
 
   const { data: treinos = [] } = useQuery<Treino[]>({
-    queryKey: ["/api/users", id, "treinos"],
+    queryKey: ["/api/pessoas", id, "treinos"],
     queryFn: async () => {
-      const response = await fetch(`/api/users/${id}/treinos`);
+      const response = await fetch(`/api/pessoas/${id}/treinos`);
       if (!response.ok) throw new Error("Failed to fetch treinos");
       return response.json();
     },
   });
 
   const { data: resultados = [] } = useQuery<Resultado[]>({
-    queryKey: ["/api/users", id, "resultados"],
+    queryKey: ["/api/pessoas", id, "resultados"],
     queryFn: async () => {
-      const response = await fetch(`/api/users/${id}/resultados`);
+      const response = await fetch(`/api/pessoas/${id}/resultados`);
       if (!response.ok) throw new Error("Failed to fetch resultados");
       return response.json();
     },
   });
 
   const { data: faturas = [] } = useQuery<Fatura[]>({
-    queryKey: ["/api/users", id, "faturas"],
+    queryKey: ["/api/pessoas", id, "faturas"],
     queryFn: async () => {
-      const response = await fetch(`/api/users/${id}/faturas`);
+      const response = await fetch(`/api/pessoas/${id}/faturas`);
       if (!response.ok) throw new Error("Failed to fetch faturas");
       return response.json();
     },
@@ -145,7 +145,7 @@ export default function PessoaDetalhes() {
           </Button>
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-3">
-              {user.name || `${user.firstName} ${user.lastName}`}
+              {user.name || "Sem nome"}
               <Badge className={estadoColors[user.estadoUtilizador || "ativo" as keyof typeof estadoColors]}>
                 {estadoLabels[user.estadoUtilizador || "ativo" as keyof typeof estadoLabels]}
               </Badge>
@@ -239,11 +239,11 @@ function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] 
 
   const updateUserMutation = useMutation({
     mutationFn: async (data: any) => {
-      await apiRequest("PUT", `/api/users/${user.id}`, data);
+      await apiRequest("PUT", `/api/pessoas/${user.id}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users", user.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pessoas", user.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pessoas"] });
       toast({
         title: "Dados atualizados",
         description: "Dados pessoais atualizados com sucesso.",
@@ -625,10 +625,10 @@ function DadosDesportivosTab({
 
   const updateDadosMutation = useMutation({
     mutationFn: async (data: any) => {
-      await apiRequest("PUT", `/api/users/${userId}/dados-desportivos`, data);
+      await apiRequest("PUT", `/api/pessoas/${userId}/dados-desportivos`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users", userId, "dados-desportivos"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pessoas", userId, "dados-desportivos"] });
       toast({
         title: "Dados atualizados",
         description: "Dados desportivos atualizados com sucesso.",
@@ -1006,10 +1006,10 @@ function ConfiguracaoTab({
 
   const updateConfigMutation = useMutation({
     mutationFn: async (data: any) => {
-      await apiRequest("PUT", `/api/users/${userId}/dados-configuracao`, data);
+      await apiRequest("PUT", `/api/pessoas/${userId}/dados-configuracao`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/users", userId, "dados-configuracao"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pessoas", userId, "dados-configuracao"] });
       toast({
         title: "Configuração atualizada",
         description: "Dados de configuração atualizados com sucesso.",
