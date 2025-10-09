@@ -1,10 +1,23 @@
+import { useQuery } from "@tanstack/react-query";
 import { StatCard } from "@/components/StatCard";
 import { ActivityCard } from "@/components/ActivityCard";
 import { Users, Activity, CreditCard, TrendingUp, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+
+interface DashboardStats {
+  totalAtletas: number;
+  atividadesMes: number;
+  receitaMensal: string;
+  taxaPresenca: string;
+}
 
 export default function Dashboard() {
+  const { data: stats, isLoading: isStatsLoading } = useQuery<DashboardStats>({
+    queryKey: ["/api/stats"],
+  });
+
   const recentActivities = [
     {
       title: "Treino de Técnica - Livres",
@@ -32,6 +45,14 @@ export default function Dashboard() {
     },
   ];
 
+  const formatCurrency = (value: string) => {
+    const num = parseFloat(value);
+    return new Intl.NumberFormat('pt-PT', {
+      style: 'currency',
+      currency: 'EUR',
+    }).format(num);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -46,34 +67,45 @@ export default function Dashboard() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Total de Atletas"
-          value="84"
-          icon={Users}
-          trend={{ value: "+5 este mês", isPositive: true }}
-          testId="stat-athletes"
-        />
-        <StatCard
-          title="Atividades do Mês"
-          value="23"
-          icon={Activity}
-          trend={{ value: "+12% vs mês anterior", isPositive: true }}
-          testId="stat-activities"
-        />
-        <StatCard
-          title="Receita Mensal"
-          value="€5,240"
-          icon={CreditCard}
-          trend={{ value: "+8% vs mês anterior", isPositive: true }}
-          testId="stat-revenue"
-        />
-        <StatCard
-          title="Taxa de Presença"
-          value="87%"
-          icon={TrendingUp}
-          trend={{ value: "-2% vs mês anterior", isPositive: false }}
-          testId="stat-attendance"
-        />
+        {isStatsLoading ? (
+          <>
+            <Skeleton className="h-32" />
+            <Skeleton className="h-32" />
+            <Skeleton className="h-32" />
+            <Skeleton className="h-32" />
+          </>
+        ) : (
+          <>
+            <StatCard
+              title="Total de Atletas"
+              value={stats?.totalAtletas.toString() || "0"}
+              icon={Users}
+              trend={{ value: "Atletas ativos", isPositive: true }}
+              testId="stat-athletes"
+            />
+            <StatCard
+              title="Atividades do Mês"
+              value={stats?.atividadesMes.toString() || "0"}
+              icon={Activity}
+              trend={{ value: "Eventos este mês", isPositive: true }}
+              testId="stat-activities"
+            />
+            <StatCard
+              title="Receita Mensal"
+              value={formatCurrency(stats?.receitaMensal || "0")}
+              icon={CreditCard}
+              trend={{ value: "Faturas pagas", isPositive: true }}
+              testId="stat-revenue"
+            />
+            <StatCard
+              title="Taxa de Presença"
+              value={`${stats?.taxaPresenca || "0"}%`}
+              icon={TrendingUp}
+              trend={{ value: "Média do mês", isPositive: parseInt(stats?.taxaPresenca || "0") >= 80 }}
+              testId="stat-attendance"
+            />
+          </>
+        )}
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

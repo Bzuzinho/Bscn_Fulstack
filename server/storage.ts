@@ -4,6 +4,8 @@ import {
   escaloes,
   atividades,
   presencas,
+  presencasNovo,
+  eventos,
   mensalidades,
   materiais,
   emprestimos,
@@ -38,7 +40,7 @@ import {
   insertCentroCustoSchema,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, sql as drizzleSql } from "drizzle-orm";
+import { eq, and, sql as drizzleSql, gte, lte } from "drizzle-orm";
 import { z } from "zod";
 
 export interface IStorage {
@@ -73,6 +75,14 @@ export interface IStorage {
   createCentroCusto(centro: z.infer<typeof insertCentroCustoSchema>): Promise<CentroCusto>;
   updateCentroCusto(id: number, centro: Partial<z.infer<typeof insertCentroCustoSchema>>): Promise<CentroCusto | undefined>;
   deleteCentroCusto(id: number): Promise<void>;
+  
+  // Dashboard Statistics
+  getDashboardStats(): Promise<{
+    totalAtletas: number;
+    atividadesMes: number;
+    receitaMensal: string;
+    taxaPresenca: string;
+  }>;
 
   // Pessoas operations (LEGACY - will be deprecated)
   getPessoas(): Promise<Pessoa[]>;
@@ -329,6 +339,85 @@ export class DatabaseStorage implements IStorage {
 
   async deleteCentroCusto(id: number): Promise<void> {
     await db.delete(centrosCusto).where(eq(centrosCusto.id, id));
+  }
+  
+  // Dashboard Statistics
+  async getDashboardStats(): Promise<{
+    totalAtletas: number;
+    atividadesMes: number;
+    receitaMensal: string;
+    taxaPresenca: string;
+  }> {
+    // Data atual para cálculos mensais
+    const hoje = new Date();
+    const primeiroDiaMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    const ultimoDiaMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+    
+    const primeiroDiaStr = primeiroDiaMes.toISOString().split('T')[0];
+    const ultimoDiaStr = ultimoDiaMes.toISOString().split('T')[0];
+    
+    // 1. Total de atletas ativos (using correct column name)
+    const [atletasResult] = await db.select({
+      count: drizzleSql<number>`count(*)::int`
+    })
+    .from(users)
+    .where(eq(users.estadoUtilizador, 'ativo'));
+    
+    const totalAtletas = atletasResult?.count || 0;
+    
+    // 2. Eventos do mês atual (using correct column name data_inicio)
+    const [eventosResult] = await db.select({
+      count: drizzleSql<number>`count(*)::int`
+    })
+    .from(eventos)
+    .where(
+      and(
+        gte(eventos.dataInicio, primeiroDiaStr),
+        lte(eventos.dataInicio, ultimoDiaStr)
+      )
+    );
+    
+    const atividadesMes = eventosResult?.count || 0;
+    
+    // 3. Receita mensal (faturas pagas do mês)
+    const [receitaResult] = await db.select({
+      total: drizzleSql<string>`COALESCE(sum(valor), 0)`
+    })
+    .from(faturas)
+    .where(
+      and(
+        eq(faturas.estado, 'paga'),
+        gte(faturas.dataVencimento, primeiroDiaStr),
+        lte(faturas.dataVencimento, ultimoDiaStr)
+      )
+    );
+    
+    const receitaMensal = receitaResult?.total || "0";
+    
+    // 4. Taxa de presença do mês
+    const [presencaResult] = await db.select({
+      total: drizzleSql<number>`count(*)::int`,
+      presentes: drizzleSql<number>`count(*) filter (where presenca = true)::int`
+    })
+    .from(presencasNovo)
+    .where(
+      and(
+        gte(presencasNovo.data, primeiroDiaStr),
+        lte(presencasNovo.data, ultimoDiaStr)
+      )
+    );
+    
+    const totalPresencas = presencaResult?.total || 0;
+    const totalPresentes = presencaResult?.presentes || 0;
+    const taxaPresencaNum = totalPresencas > 0 ? (totalPresentes / totalPresencas) * 100 : 0;
+    const taxaPresenca = taxaPresencaNum.toFixed(0);
+    
+    return {
+      totalAtletas,
+      atividadesMes,
+      receitaMensal,
+      taxaPresenca,
+    };
   }
 
   // Pessoas operations (LEGACY - will be deprecated)
