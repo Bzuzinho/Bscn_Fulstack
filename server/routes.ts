@@ -556,6 +556,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Dados Desportivos routes
+  app.get('/api/users/:id/dados-desportivos', isAuthenticated, async (req, res) => {
+    try {
+      const dados = await storage.getDadosDesportivos(req.params.id);
+      res.json(dados || {});
+    } catch (error) {
+      console.error("Error fetching dados desportivos:", error);
+      res.status(500).json({ message: "Failed to fetch dados desportivos" });
+    }
+  });
+
+  app.put('/api/users/:id/dados-desportivos', isAuthenticated, async (req, res) => {
+    try {
+      const dados = await storage.upsertDadosDesportivos({
+        ...req.body,
+        userId: req.params.id,
+      });
+      res.json(dados);
+    } catch (error) {
+      console.error("Error updating dados desportivos:", error);
+      res.status(500).json({ message: "Failed to update dados desportivos" });
+    }
+  });
+
+  // Dados Configuracao routes
+  app.get('/api/users/:id/dados-configuracao', isAuthenticated, async (req, res) => {
+    try {
+      const dados = await storage.getDadosConfiguracao(req.params.id);
+      res.json(dados || {});
+    } catch (error) {
+      console.error("Error fetching dados configuracao:", error);
+      res.status(500).json({ message: "Failed to fetch dados configuracao" });
+    }
+  });
+
+  app.put('/api/users/:id/dados-configuracao', isAuthenticated, async (req, res) => {
+    try {
+      const dados = await storage.upsertDadosConfiguracao({
+        ...req.body,
+        userId: req.params.id,
+      });
+      res.json(dados);
+    } catch (error) {
+      console.error("Error updating dados configuracao:", error);
+      res.status(500).json({ message: "Failed to update dados configuracao" });
+    }
+  });
+
+  // Treinos routes
+  app.get('/api/users/:id/treinos', isAuthenticated, async (req, res) => {
+    try {
+      const treinos = await storage.getTreinos(req.params.id);
+      res.json(treinos);
+    } catch (error) {
+      console.error("Error fetching treinos:", error);
+      res.status(500).json({ message: "Failed to fetch treinos" });
+    }
+  });
+
+  // Resultados routes
+  app.get('/api/users/:id/resultados', isAuthenticated, async (req, res) => {
+    try {
+      const resultados = await storage.getResultados(req.params.id);
+      res.json(resultados);
+    } catch (error) {
+      console.error("Error fetching resultados:", error);
+      res.status(500).json({ message: "Failed to fetch resultados" });
+    }
+  });
+
+  // User faturas route (already exists via /api/faturas?userId=X, but adding specific route)
+  app.get('/api/users/:id/faturas', isAuthenticated, async (req, res) => {
+    try {
+      const faturas = await storage.getFaturasWithUser(req.params.id);
+      res.json(faturas);
+    } catch (error) {
+      console.error("Error fetching user faturas:", error);
+      res.status(500).json({ message: "Failed to fetch faturas" });
+    }
+  });
+
   // Faturas routes (NEW SYSTEM)
   app.get('/api/faturas', isAuthenticated, async (req, res) => {
     try {

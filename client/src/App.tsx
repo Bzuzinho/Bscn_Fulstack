@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 import Landing from "@/pages/Landing";
 import Dashboard from "@/pages/Dashboard";
 import Pessoas from "@/pages/Pessoas";
+import PessoaDetalhes from "@/pages/PessoaDetalhes.tsx";
 import Atividades from "@/pages/Atividades";
 import Financeiro from "@/pages/Financeiro";
 import Inventario from "@/pages/Inventario";
@@ -45,6 +46,7 @@ function AppContent() {
           <main className="flex-1 overflow-auto p-6">
             <Switch>
               <Route path="/" component={Dashboard} />
+              <Route path="/pessoas/:id" component={PessoaDetalhes} />
               <Route path="/pessoas" component={Pessoas} />
               <Route path="/atividades" component={Atividades} />
               <Route path="/financeiro" component={Financeiro} />

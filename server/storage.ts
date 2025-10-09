@@ -14,6 +14,10 @@ import {
   faturaItens,
   tiposMensalidade,
   centrosCusto,
+  dadosDesportivos,
+  dadosConfiguracao,
+  treinos,
+  resultados,
   type User,
   type UpsertUser,
   type Pessoa,
@@ -35,9 +39,17 @@ import {
   type Fatura,
   type TipoMensalidade,
   type CentroCusto,
+  type DadosDesportivos,
+  type DadosConfiguracao,
+  type Treino,
+  type Resultado,
   insertFaturaSchema,
   insertTipoMensalidadeSchema,
   insertCentroCustoSchema,
+  insertDadosDesportivosSchema,
+  insertDadosConfiguracaoSchema,
+  insertTreinoSchema,
+  insertResultadoSchema,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, sql as drizzleSql, gte, lte } from "drizzle-orm";
@@ -83,6 +95,22 @@ export interface IStorage {
     receitaMensal: string;
     taxaPresenca: string;
   }>;
+
+  // Dados Desportivos operations
+  getDadosDesportivos(userId: string): Promise<DadosDesportivos | undefined>;
+  upsertDadosDesportivos(dados: z.infer<typeof insertDadosDesportivosSchema>): Promise<DadosDesportivos>;
+
+  // Dados Configuracao operations
+  getDadosConfiguracao(userId: string): Promise<DadosConfiguracao | undefined>;
+  upsertDadosConfiguracao(dados: z.infer<typeof insertDadosConfiguracaoSchema>): Promise<DadosConfiguracao>;
+
+  // Treinos operations
+  getTreinos(userId: string): Promise<Treino[]>;
+  createTreino(treino: z.infer<typeof insertTreinoSchema>): Promise<Treino>;
+
+  // Resultados operations
+  getResultados(userId: string): Promise<Resultado[]>;
+  createResultado(resultado: z.infer<typeof insertResultadoSchema>): Promise<Resultado>;
 
   // Pessoas operations (LEGACY - will be deprecated)
   getPessoas(): Promise<Pessoa[]>;
@@ -651,6 +679,90 @@ export class DatabaseStorage implements IStorage {
 
   async deleteEmail(id: number): Promise<void> {
     await db.delete(emails).where(eq(emails.id, id));
+  }
+
+  // Dados Desportivos operations
+  async getDadosDesportivos(userId: string): Promise<DadosDesportivos | undefined> {
+    const [dados] = await db
+      .select()
+      .from(dadosDesportivos)
+      .where(eq(dadosDesportivos.userId, userId));
+    return dados;
+  }
+
+  async upsertDadosDesportivos(dados: z.infer<typeof insertDadosDesportivosSchema>): Promise<DadosDesportivos> {
+    const existing = await this.getDadosDesportivos(dados.userId);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(dadosDesportivos)
+        .set(dados)
+        .where(eq(dadosDesportivos.userId, dados.userId))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(dadosDesportivos)
+        .values(dados)
+        .returning();
+      return created;
+    }
+  }
+
+  // Dados Configuracao operations
+  async getDadosConfiguracao(userId: string): Promise<DadosConfiguracao | undefined> {
+    const [dados] = await db
+      .select()
+      .from(dadosConfiguracao)
+      .where(eq(dadosConfiguracao.userId, userId));
+    return dados;
+  }
+
+  async upsertDadosConfiguracao(dados: z.infer<typeof insertDadosConfiguracaoSchema>): Promise<DadosConfiguracao> {
+    const existing = await this.getDadosConfiguracao(dados.userId);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(dadosConfiguracao)
+        .set(dados)
+        .where(eq(dadosConfiguracao.userId, dados.userId))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(dadosConfiguracao)
+        .values(dados)
+        .returning();
+      return created;
+    }
+  }
+
+  // Treinos operations
+  async getTreinos(userId: string): Promise<Treino[]> {
+    return db
+      .select()
+      .from(treinos)
+      .where(eq(treinos.userId, userId))
+      .orderBy(treinos.data);
+  }
+
+  async createTreino(treino: z.infer<typeof insertTreinoSchema>): Promise<Treino> {
+    const [newTreino] = await db.insert(treinos).values(treino).returning();
+    return newTreino;
+  }
+
+  // Resultados operations
+  async getResultados(userId: string): Promise<Resultado[]> {
+    return db
+      .select()
+      .from(resultados)
+      .where(eq(resultados.userId, userId))
+      .orderBy(resultados.data);
+  }
+
+  async createResultado(resultado: z.infer<typeof insertResultadoSchema>): Promise<Resultado> {
+    const [newResultado] = await db.insert(resultados).values(resultado).returning();
+    return newResultado;
   }
 }
 

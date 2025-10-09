@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -47,7 +48,7 @@ type UserFormData = z.infer<typeof userFormSchema>;
 
 export default function Pessoas() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [, navigate] = useLocation();
   const { toast } = useToast();
 
   const form = useForm<UserFormData>({
@@ -78,22 +79,15 @@ export default function Pessoas() {
 
   const saveUserMutation = useMutation({
     mutationFn: async (data: UserFormData) => {
-      if (editingUser) {
-        await apiRequest("PUT", `/api/users/${editingUser.id}`, data);
-      } else {
-        await apiRequest("POST", "/api/users", data);
-      }
+      await apiRequest("POST", "/api/users", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({
-        title: editingUser ? "Utilizador atualizado" : "Utilizador criado",
-        description: editingUser 
-          ? "Utilizador atualizado com sucesso." 
-          : "Novo utilizador adicionado com sucesso.",
+        title: "Utilizador criado",
+        description: "Novo utilizador adicionado com sucesso.",
       });
       setIsDialogOpen(false);
-      setEditingUser(null);
       form.reset();
     },
     onError: (error: Error) => {
@@ -147,40 +141,21 @@ export default function Pessoas() {
     },
   });
 
-  const handleOpenDialog = (user?: User) => {
-    if (user) {
-      setEditingUser(user);
-      form.reset({
-        name: user.name || "",
-        email: user.email || "",
-        contacto: user.contacto || "",
-        nif: user.nif || "",
-        dataNascimento: user.dataNascimento || "",
-        morada: user.morada || "",
-        codigoPostal: user.codigoPostal || "",
-        localidade: user.localidade || "",
-        numeroSocio: user.numeroSocio || "",
-        escalaoId: user.escalaoId,
-        estadoUtilizador: user.estadoUtilizador || "ativo",
-        observacoesConfig: user.observacoesConfig || "",
-      });
-    } else {
-      setEditingUser(null);
-      form.reset({
-        name: "",
-        email: "",
-        contacto: "",
-        nif: "",
-        dataNascimento: "",
-        morada: "",
-        codigoPostal: "",
-        localidade: "",
-        numeroSocio: "",
-        escalaoId: null,
-        estadoUtilizador: "ativo",
-        observacoesConfig: "",
-      });
-    }
+  const handleOpenDialog = () => {
+    form.reset({
+      name: "",
+      email: "",
+      contacto: "",
+      nif: "",
+      dataNascimento: "",
+      morada: "",
+      codigoPostal: "",
+      localidade: "",
+      numeroSocio: "",
+      escalaoId: null,
+      estadoUtilizador: "ativo",
+      observacoesConfig: "",
+    });
     setIsDialogOpen(true);
   };
 
@@ -238,7 +213,13 @@ export default function Pessoas() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {users.map((user) => (
-            <Card key={user.id} className="hover-elevate" data-testid={`user-${user.id}`}>
+            <Card 
+              key={user.id} 
+              className="hover-elevate cursor-pointer" 
+              onClick={() => navigate(`/pessoas/${user.id}`)}
+              role="button"
+              data-testid={`card-user-${user.id}`}
+            >
               <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-3">
                 <div className="flex-1">
                   <h3 className="font-semibold text-base" data-testid={`user-${user.id}-name`}>
@@ -289,19 +270,14 @@ export default function Pessoas() {
                     </Badge>
                   </div>
                 )}
-                <div className="flex items-center justify-between gap-2 pt-2 border-t">
+                <div className="flex items-center justify-end gap-2 pt-2 border-t">
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    onClick={() => handleOpenDialog(user)}
-                    data-testid={`user-${user.id}-edit`}
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => deleteUserMutation.mutate(user.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteUserMutation.mutate(user.id);
+                    }}
                     data-testid={`user-${user.id}-delete`}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -317,7 +293,7 @@ export default function Pessoas() {
         <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto" data-testid="dialog-user">
           <DialogHeader>
             <DialogTitle>
-              {editingUser ? "Editar Utilizador" : "Novo Utilizador"}
+              Novo Utilizador
             </DialogTitle>
           </DialogHeader>
           <Form {...form}>
