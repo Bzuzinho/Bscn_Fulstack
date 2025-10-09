@@ -3,144 +3,97 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
-import { AthleteCard } from "@/components/AthleteCard";
-import { DataTable } from "@/components/DataTable";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogFooter 
-} from "@/components/ui/dialog";
-import { 
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, LayoutGrid, TableIcon, Pencil, Trash2, Settings } from "lucide-react";
+import { Plus, Users, Pencil, Trash2, Phone, Mail, MapPin, Calendar } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertPessoaSchema, insertEscalaoSchema, type Pessoa, type Escalao } from "@shared/schema";
+import { upsertUserSchema, type User, type Escalao } from "@shared/schema";
 import { z } from "zod";
+import { format } from "date-fns";
+import { pt } from "date-fns/locale";
 
-// Validação melhorada para o formulário de pessoas
-const pessoaFormSchema = insertPessoaSchema.extend({
-  nome: z.string().min(1, "Nome é obrigatório"),
-  tipo: z.string().min(1, "Tipo é obrigatório"),
-  email: z.preprocess(
-    (val) => val === "" ? undefined : val,
-    z.string().email("Email inválido").optional()
-  ),
-  telefone: z.preprocess(
-    (val) => val === "" ? undefined : val,
-    z.string()
-      .regex(/^(\+351\s?)?((9[1-9]|2[1-9])\d{7})$/, "Telefone inválido (ex: +351 912345678 ou 212345678)")
-      .optional()
-  ),
-  nif: z.preprocess(
-    (val) => val === "" ? undefined : val,
-    z.string()
-      .regex(/^\d{9}$/, "NIF deve ter 9 dígitos")
-      .optional()
-  ),
+// Schema de validação para formulário de utilizador
+const userFormSchema = upsertUserSchema.pick({
+  name: true,
+  email: true,
+  contacto: true,
+  nif: true,
+  dataNascimento: true,
+  morada: true,
+  codigoPostal: true,
+  localidade: true,
+  numeroSocio: true,
+  escalaoId: true,
+  estadoUtilizador: true,
+  observacoesConfig: true,
+}).extend({
+  name: z.string().min(1, "Nome completo é obrigatório"),
+  email: z.string().email("Email inválido").optional().or(z.literal("")),
+  contacto: z.string().min(9, "Contacto deve ter pelo menos 9 dígitos").optional().or(z.literal("")),
+  nif: z.string().length(9, "NIF deve ter 9 dígitos").optional().or(z.literal("")),
+  dataNascimento: z.string().optional().or(z.literal("")),
+  escalaoId: z.number().nullable().optional(),
 });
 
-const escalaoFormSchema = insertEscalaoSchema.extend({
-  nome: z.string().min(1, "Nome é obrigatório"),
-});
-
-type PessoaFormData = z.infer<typeof pessoaFormSchema>;
-type EscalaoFormData = z.infer<typeof escalaoFormSchema>;
+type UserFormData = z.infer<typeof userFormSchema>;
 
 export default function Pessoas() {
-  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
-  const [selectedTab, setSelectedTab] = useState<"atletas" | "treinadores" | "encarregados">("atletas");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingPessoa, setEditingPessoa] = useState<Pessoa | null>(null);
-  const [deletingPessoa, setDeletingPessoa] = useState<Pessoa | null>(null);
-  const [isEscalaoDialogOpen, setIsEscalaoDialogOpen] = useState(false);
-  const [editingEscalao, setEditingEscalao] = useState<Escalao | null>(null);
-  const [deletingEscalao, setDeletingEscalao] = useState<Escalao | null>(null);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
   const { toast } = useToast();
 
-  const form = useForm<PessoaFormData>({
-    resolver: zodResolver(pessoaFormSchema),
+  const form = useForm<UserFormData>({
+    resolver: zodResolver(userFormSchema),
     defaultValues: {
-      nome: "",
+      name: "",
       email: "",
-      telefone: "",
-      tipo: "atleta",
-      escalao: undefined,
-      dataNascimento: "",
+      contacto: "",
       nif: "",
+      dataNascimento: "",
       morada: "",
-      observacoes: "",
-      ativo: true,
+      codigoPostal: "",
+      localidade: "",
+      numeroSocio: "",
+      escalaoId: null,
+      estadoUtilizador: "ativo",
+      observacoesConfig: "",
     },
   });
 
-  const escalaoForm = useForm<EscalaoFormData>({
-    resolver: zodResolver(escalaoFormSchema),
-    defaultValues: {
-      nome: "",
-      descricao: "",
-    },
+  const { data: users = [], isLoading: isUsersLoading } = useQuery<User[]>({
+    queryKey: ["/api/users"],
   });
 
-  // Fetch escaloes
   const { data: escaloes = [] } = useQuery<Escalao[]>({
     queryKey: ["/api/escaloes"],
   });
 
-  // Fetch pessoas with tipo filter
-  const { data: pessoas = [], isLoading: isPessoasLoading } = useQuery<Pessoa[]>({
-    queryKey: ["/api/pessoas", selectedTab],
-    queryFn: async () => {
-      const tipoMap = {
-        atletas: "atleta",
-        treinadores: "treinador",
-        encarregados: "encarregado",
-      };
-      const res = await fetch(`/api/pessoas?tipo=${tipoMap[selectedTab]}`);
-      if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
-      return res.json();
-    },
-  });
-
-  // Pessoa mutations
-  const savePessoaMutation = useMutation({
-    mutationFn: async (data: PessoaFormData) => {
-      if (editingPessoa) {
-        await apiRequest("PUT", `/api/pessoas/${editingPessoa.id}`, data);
+  const saveUserMutation = useMutation({
+    mutationFn: async (data: UserFormData) => {
+      if (editingUser) {
+        await apiRequest("PUT", `/api/users/${editingUser.id}`, data);
       } else {
-        await apiRequest("POST", "/api/pessoas", data);
+        await apiRequest("POST", "/api/users", data);
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/pessoas"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({
-        title: editingPessoa ? "Pessoa atualizada" : "Pessoa criada",
-        description: editingPessoa 
-          ? "Dados atualizados com sucesso." 
-          : "Nova pessoa adicionada com sucesso.",
+        title: editingUser ? "Utilizador atualizado" : "Utilizador criado",
+        description: editingUser 
+          ? "Utilizador atualizado com sucesso." 
+          : "Novo utilizador adicionado com sucesso.",
       });
       setIsDialogOpen(false);
-      setEditingPessoa(null);
+      setEditingUser(null);
       form.reset();
     },
     onError: (error: Error) => {
@@ -150,28 +103,29 @@ export default function Pessoas() {
           description: "A fazer login novamente...",
           variant: "destructive",
         });
-        setTimeout(() => window.location.href = "/api/login", 500);
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
         return;
       }
       toast({
         title: "Erro",
-        description: "Falha ao guardar pessoa.",
+        description: "Falha ao guardar utilizador.",
         variant: "destructive",
       });
     },
   });
 
-  const deletePessoaMutation = useMutation({
-    mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/pessoas/${id}`);
+  const deleteUserMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/users/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/pessoas"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
       toast({
-        title: "Pessoa eliminada",
-        description: "Pessoa eliminada com sucesso.",
+        title: "Utilizador eliminado",
+        description: "Utilizador eliminado com sucesso.",
       });
-      setDeletingPessoa(null);
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
@@ -180,353 +134,208 @@ export default function Pessoas() {
           description: "A fazer login novamente...",
           variant: "destructive",
         });
-        setTimeout(() => window.location.href = "/api/login", 500);
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
         return;
       }
       toast({
         title: "Erro",
-        description: "Falha ao eliminar pessoa.",
+        description: "Falha ao eliminar utilizador.",
         variant: "destructive",
       });
     },
   });
 
-  // Escalão mutations
-  const saveEscalaoMutation = useMutation({
-    mutationFn: async (data: EscalaoFormData) => {
-      if (editingEscalao) {
-        await apiRequest("PUT", `/api/escaloes/${editingEscalao.id}`, data);
-      } else {
-        await apiRequest("POST", "/api/escaloes", data);
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/escaloes"] });
-      toast({
-        title: editingEscalao ? "Escalão atualizado" : "Escalão criado",
-        description: editingEscalao 
-          ? "Escalão atualizado com sucesso." 
-          : "Novo escalão adicionado com sucesso.",
-      });
-      setIsEscalaoDialogOpen(false);
-      setEditingEscalao(null);
-      escalaoForm.reset();
-    },
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Não autorizado",
-          description: "A fazer login novamente...",
-          variant: "destructive",
-        });
-        setTimeout(() => window.location.href = "/api/login", 500);
-        return;
-      }
-      toast({
-        title: "Erro",
-        description: "Falha ao guardar escalão.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const deleteEscalaoMutation = useMutation({
-    mutationFn: async (id: number) => {
-      await apiRequest("DELETE", `/api/escaloes/${id}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/escaloes"] });
-      toast({
-        title: "Escalão eliminado",
-        description: "Escalão eliminado com sucesso.",
-      });
-      setDeletingEscalao(null);
-    },
-    onError: (error: Error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Não autorizado",
-          description: "A fazer login novamente...",
-          variant: "destructive",
-        });
-        setTimeout(() => window.location.href = "/api/login", 500);
-        return;
-      }
-      toast({
-        title: "Erro",
-        description: "Falha ao eliminar escalão. Pode estar em uso.",
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleOpenPessoaDialog = (pessoa?: Pessoa) => {
-    if (pessoa) {
-      setEditingPessoa(pessoa);
+  const handleOpenDialog = (user?: User) => {
+    if (user) {
+      setEditingUser(user);
       form.reset({
-        nome: pessoa.nome,
-        email: pessoa.email || "",
-        telefone: pessoa.telefone || "",
-        tipo: pessoa.tipo,
-        escalao: pessoa.escalao || undefined,
-        dataNascimento: pessoa.dataNascimento || "",
-        nif: pessoa.nif || "",
-        morada: pessoa.morada || "",
-        observacoes: pessoa.observacoes || "",
-        ativo: pessoa.ativo ?? true,
+        name: user.name || "",
+        email: user.email || "",
+        contacto: user.contacto || "",
+        nif: user.nif || "",
+        dataNascimento: user.dataNascimento || "",
+        morada: user.morada || "",
+        codigoPostal: user.codigoPostal || "",
+        localidade: user.localidade || "",
+        numeroSocio: user.numeroSocio || "",
+        escalaoId: user.escalaoId,
+        estadoUtilizador: user.estadoUtilizador || "ativo",
+        observacoesConfig: user.observacoesConfig || "",
       });
     } else {
-      setEditingPessoa(null);
-      const tipoMap = {
-        atletas: "atleta",
-        treinadores: "treinador",
-        encarregados: "encarregado",
-      };
+      setEditingUser(null);
       form.reset({
-        nome: "",
+        name: "",
         email: "",
-        telefone: "",
-        tipo: tipoMap[selectedTab],
-        escalao: undefined,
-        dataNascimento: "",
+        contacto: "",
         nif: "",
+        dataNascimento: "",
         morada: "",
-        observacoes: "",
-        ativo: true,
+        codigoPostal: "",
+        localidade: "",
+        numeroSocio: "",
+        escalaoId: null,
+        estadoUtilizador: "ativo",
+        observacoesConfig: "",
       });
     }
     setIsDialogOpen(true);
   };
 
-  const handleOpenEscalaoDialog = (escalao?: Escalao) => {
-    if (escalao) {
-      setEditingEscalao(escalao);
-      escalaoForm.reset({
-        nome: escalao.nome,
-        descricao: escalao.descricao || "",
-      });
-    } else {
-      setEditingEscalao(null);
-      escalaoForm.reset({
-        nome: "",
-        descricao: "",
-      });
-    }
-    setIsEscalaoDialogOpen(true);
+  const handleSubmit = (data: UserFormData) => {
+    saveUserMutation.mutate(data);
   };
 
-  const handleSubmitPessoa = (data: PessoaFormData) => {
-    savePessoaMutation.mutate(data);
+  const getEscalaoNome = (escalaoId: number | null | undefined) => {
+    if (!escalaoId) return null;
+    const escalao = escaloes.find(e => e.id === escalaoId);
+    return escalao?.nome || null;
   };
 
-  const handleSubmitEscalao = (data: EscalaoFormData) => {
-    saveEscalaoMutation.mutate(data);
+  const estadoColors: Record<string, string> = {
+    ativo: "bg-chart-2 text-white",
+    inativo: "bg-muted text-muted-foreground",
+    suspenso: "bg-destructive text-destructive-foreground",
   };
 
-  const getEscalaoName = (escalaoId: number | null) => {
-    if (!escalaoId) return "-";
-    const escalao = escaloes.find((e) => e.id === escalaoId);
-    return escalao?.nome || "-";
-  };
-
-  const statusColors = {
-    active: "bg-chart-2 text-white",
-    inactive: "bg-muted text-muted-foreground",
-  };
-
-  const statusLabels = {
-    active: "Ativo",
-    inactive: "Inativo",
-  };
-
-  const tableColumns = [
-    { key: "nome", header: "Nome" },
-    { 
-      key: "escalao", 
-      header: "Escalão",
-      render: (item: Pessoa) => getEscalaoName(item.escalao),
-    },
-    { key: "email", header: "Email" },
-    { key: "telefone", header: "Telefone" },
-    {
-      key: "ativo",
-      header: "Estado",
-      render: (item: Pessoa) => (
-        <Badge className={item.ativo ? statusColors.active : statusColors.inactive}>
-          {item.ativo ? statusLabels.active : statusLabels.inactive}
-        </Badge>
-      ),
-    },
-  ];
-
-  const getTipoLabel = () => {
-    const labels = {
-      atletas: "Atleta",
-      treinadores: "Treinador",
-      encarregados: "Encarregado",
-    };
-    return labels[selectedTab];
+  const estadoLabels: Record<string, string> = {
+    ativo: "Ativo",
+    inativo: "Inativo",
+    suspenso: "Suspenso",
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Gestão de Pessoas</h1>
-          <p className="text-muted-foreground mt-1">Gerir atletas, treinadores e encarregados</p>
+          <h1 className="text-3xl font-bold">Pessoas</h1>
+          <p className="text-muted-foreground mt-1">Gerir atletas e utilizadores</p>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <Button 
-            variant="outline" 
-            onClick={() => handleOpenEscalaoDialog()}
-            data-testid="button-manage-escaloes"
-          >
-            <Settings className="h-4 w-4 mr-2" />
-            Gerir Escalões
-          </Button>
-          <div className="flex rounded-md border">
-            <Button
-              variant={viewMode === "grid" ? "secondary" : "ghost"}
-              size="icon"
-              onClick={() => setViewMode("grid")}
-              data-testid="button-view-grid"
-            >
-              <LayoutGrid className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={viewMode === "table" ? "secondary" : "ghost"}
-              size="icon"
-              onClick={() => setViewMode("table")}
-              data-testid="button-view-table"
-            >
-              <TableIcon className="h-4 w-4" />
-            </Button>
-          </div>
-          <Button onClick={() => handleOpenPessoaDialog()} data-testid="button-new-person">
-            <Plus className="h-4 w-4 mr-2" />
-            Novo {getTipoLabel()}
-          </Button>
-        </div>
+        <Button onClick={() => handleOpenDialog()} data-testid="button-new-user">
+          <Plus className="h-4 w-4 mr-2" />
+          Novo Utilizador
+        </Button>
       </div>
 
-      <Tabs value={selectedTab} onValueChange={(v) => setSelectedTab(v as any)} className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="atletas" data-testid="tab-athletes">Atletas</TabsTrigger>
-          <TabsTrigger value="treinadores" data-testid="tab-coaches">Treinadores</TabsTrigger>
-          <TabsTrigger value="encarregados" data-testid="tab-guardians">Encarregados</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value={selectedTab} className="space-y-4">
-          {isPessoasLoading ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-32" data-testid={`skeleton-${i}`} />
-              ))}
-            </div>
-          ) : pessoas.length === 0 ? (
-            <Card className="p-12">
-              <div className="text-center text-muted-foreground" data-testid="empty-state">
-                <p className="text-lg mb-4">Nenhum {getTipoLabel().toLowerCase()} encontrado.</p>
-                <Button onClick={() => handleOpenPessoaDialog()} data-testid="button-add-first">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Adicionar Primeiro {getTipoLabel()}
-                </Button>
-              </div>
-            </Card>
-          ) : viewMode === "grid" ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {pessoas.map((pessoa) => (
-                <div key={pessoa.id} className="relative">
-                  <AthleteCard
-                    name={pessoa.nome}
-                    escalao={getEscalaoName(pessoa.escalao)}
-                    email={pessoa.email || "-"}
-                    phone={pessoa.telefone || "-"}
-                    status={pessoa.ativo ? "active" : "inactive"}
-                    testId={`pessoa-${pessoa.id}`}
-                  />
-                  <div className="absolute top-2 right-2 flex gap-1">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 bg-background/80 backdrop-blur-sm hover-elevate"
-                      onClick={() => handleOpenPessoaDialog(pessoa)}
-                      data-testid={`button-edit-${pessoa.id}`}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 bg-background/80 backdrop-blur-sm hover-elevate"
-                      onClick={() => setDeletingPessoa(pessoa)}
-                      data-testid={`button-delete-${pessoa.id}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+      {isUsersLoading ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <Skeleton className="h-56" />
+          <Skeleton className="h-56" />
+          <Skeleton className="h-56" />
+        </div>
+      ) : users.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Users className="h-12 w-12 text-muted-foreground mb-4" />
+            <p className="text-lg font-medium">Nenhum utilizador encontrado</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Adicione o primeiro utilizador
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {users.map((user) => (
+            <Card key={user.id} className="hover-elevate" data-testid={`user-${user.id}`}>
+              <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-3">
+                <div className="flex-1">
+                  <h3 className="font-semibold text-base" data-testid={`user-${user.id}-name`}>
+                    {user.name || `${user.firstName} ${user.lastName}`}
+                  </h3>
+                  {user.numeroSocio && (
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Sócio nº {user.numeroSocio}
+                    </p>
+                  )}
                 </div>
-              ))}
-            </div>
-          ) : (
-            <DataTable
-              data={pessoas}
-              columns={tableColumns}
-              searchPlaceholder={`Pesquisar ${getTipoLabel().toLowerCase()}s...`}
-              onRowClick={(item) => handleOpenPessoaDialog(item as Pessoa)}
-              testId="pessoas-table"
-            />
-          )}
-        </TabsContent>
-      </Tabs>
+                <Badge 
+                  className={estadoColors[user.estadoUtilizador || "ativo"]}
+                  data-testid={`user-${user.id}-status`}
+                >
+                  {estadoLabels[user.estadoUtilizador || "ativo"]}
+                </Badge>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {user.email && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Mail className="h-4 w-4" />
+                    <span className="truncate" data-testid={`user-${user.id}-email`}>{user.email}</span>
+                  </div>
+                )}
+                {user.contacto && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Phone className="h-4 w-4" />
+                    <span data-testid={`user-${user.id}-phone`}>{user.contacto}</span>
+                  </div>
+                )}
+                {user.localidade && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <MapPin className="h-4 w-4" />
+                    <span data-testid={`user-${user.id}-location`}>{user.localidade}</span>
+                  </div>
+                )}
+                {user.dataNascimento && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Calendar className="h-4 w-4" />
+                    <span>{format(new Date(user.dataNascimento), "dd/MM/yyyy", { locale: pt })}</span>
+                  </div>
+                )}
+                {getEscalaoNome(user.escalaoId) && (
+                  <div className="mt-2">
+                    <Badge variant="outline" data-testid={`user-${user.id}-escalao`}>
+                      {getEscalaoNome(user.escalaoId)}
+                    </Badge>
+                  </div>
+                )}
+                <div className="flex items-center justify-between gap-2 pt-2 border-t">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => handleOpenDialog(user)}
+                    data-testid={`user-${user.id}-edit`}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => deleteUserMutation.mutate(user.id)}
+                    data-testid={`user-${user.id}-delete`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
-      {/* Create/Edit Pessoa Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="dialog-pessoa">
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto" data-testid="dialog-user">
           <DialogHeader>
             <DialogTitle>
-              {editingPessoa ? "Editar" : "Adicionar"} {getTipoLabel()}
+              {editingUser ? "Editar Utilizador" : "Novo Utilizador"}
             </DialogTitle>
-            <DialogDescription>
-              Preencha os dados da pessoa. Campos com * são obrigatórios.
-            </DialogDescription>
           </DialogHeader>
-          
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(handleSubmitPessoa)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="nome"
+                  name="name"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nome *</FormLabel>
+                    <FormItem className="col-span-2">
+                      <FormLabel>Nome Completo *</FormLabel>
                       <FormControl>
-                        <Input {...field} data-testid="input-nome" />
+                        <Input 
+                          placeholder="João Silva" 
+                          {...field}
+                          data-testid="input-name"
+                        />
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="tipo"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tipo *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-tipo">
-                            <SelectValue placeholder="Selecionar tipo" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="atleta">Atleta</SelectItem>
-                          <SelectItem value="treinador">Treinador</SelectItem>
-                          <SelectItem value="encarregado">Encarregado</SelectItem>
-                        </SelectContent>
-                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -539,25 +348,11 @@ export default function Pessoas() {
                     <FormItem>
                       <FormLabel>Email</FormLabel>
                       <FormControl>
-                        <Input type="email" {...field} value={field.value || ""} data-testid="input-email" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="telefone"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Telefone</FormLabel>
-                      <FormControl>
                         <Input 
-                          {...field} 
-                          value={field.value || ""} 
-                          placeholder="+351 912345678"
-                          data-testid="input-telefone" 
+                          type="email" 
+                          placeholder="joao@email.com" 
+                          {...field}
+                          data-testid="input-email"
                         />
                       </FormControl>
                       <FormMessage />
@@ -567,27 +362,17 @@ export default function Pessoas() {
 
                 <FormField
                   control={form.control}
-                  name="escalao"
+                  name="contacto"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Escalão</FormLabel>
-                      <Select 
-                        onValueChange={(value) => field.onChange(value ? parseInt(value) : undefined)}
-                        value={field.value?.toString() || ""}
-                      >
-                        <FormControl>
-                          <SelectTrigger data-testid="select-escalao">
-                            <SelectValue placeholder="Selecionar escalão" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {escaloes.map((escalao) => (
-                            <SelectItem key={escalao.id} value={escalao.id.toString()}>
-                              {escalao.nome}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormLabel>Contacto</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="912345678" 
+                          {...field}
+                          data-testid="input-contacto"
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -595,16 +380,16 @@ export default function Pessoas() {
 
                 <FormField
                   control={form.control}
-                  name="dataNascimento"
+                  name="numeroSocio"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Data de Nascimento</FormLabel>
+                      <FormLabel>Número de Sócio</FormLabel>
                       <FormControl>
                         <Input 
-                          type="date" 
-                          {...field} 
-                          value={field.value || ""} 
-                          data-testid="input-data-nascimento" 
+                          placeholder="001" 
+                          {...field}
+                          value={field.value || ""}
+                          data-testid="input-numero-socio"
                         />
                       </FormControl>
                       <FormMessage />
@@ -620,11 +405,10 @@ export default function Pessoas() {
                       <FormLabel>NIF</FormLabel>
                       <FormControl>
                         <Input 
-                          {...field} 
-                          value={field.value || ""} 
-                          placeholder="123456789"
+                          placeholder="123456789" 
                           maxLength={9}
-                          data-testid="input-nif" 
+                          {...field}
+                          data-testid="input-nif"
                         />
                       </FormControl>
                       <FormMessage />
@@ -634,73 +418,155 @@ export default function Pessoas() {
 
                 <FormField
                   control={form.control}
-                  name="ativo"
+                  name="dataNascimento"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Estado</FormLabel>
+                      <FormLabel>Data de Nascimento</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="date" 
+                          {...field}
+                          data-testid="input-data-nascimento"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="escalaoId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Escalão</FormLabel>
                       <Select 
-                        onValueChange={(value) => field.onChange(value === "true")}
-                        value={field.value ? "true" : "false"}
+                        onValueChange={(value) => field.onChange(value ? parseInt(value) : null)}
+                        value={field.value?.toString() || ""}
                       >
                         <FormControl>
-                          <SelectTrigger data-testid="select-ativo">
-                            <SelectValue />
+                          <SelectTrigger data-testid="input-escalao">
+                            <SelectValue placeholder="Selecione um escalão" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="true">Ativo</SelectItem>
-                          <SelectItem value="false">Inativo</SelectItem>
+                          <SelectItem value="">Nenhum</SelectItem>
+                          {escaloes.map((escalao) => (
+                            <SelectItem key={escalao.id} value={escalao.id.toString()}>
+                              {escalao.nome}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
+                <FormField
+                  control={form.control}
+                  name="estadoUtilizador"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Estado</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || "ativo"}>
+                        <FormControl>
+                          <SelectTrigger data-testid="input-estado">
+                            <SelectValue placeholder="Selecione o estado" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="ativo">Ativo</SelectItem>
+                          <SelectItem value="inativo">Inativo</SelectItem>
+                          <SelectItem value="suspenso">Suspenso</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="morada"
+                  render={({ field }) => (
+                    <FormItem className="col-span-2">
+                      <FormLabel>Morada</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="Rua Example, nº 123" 
+                          {...field}
+                          value={field.value || ""}
+                          data-testid="input-morada"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="codigoPostal"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Código Postal</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="1000-001" 
+                          {...field}
+                          value={field.value || ""}
+                          data-testid="input-codigo-postal"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="localidade"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Localidade</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="Lisboa" 
+                          {...field}
+                          value={field.value || ""}
+                          data-testid="input-localidade"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="observacoesConfig"
+                  render={({ field }) => (
+                    <FormItem className="col-span-2">
+                      <FormLabel>Observações</FormLabel>
+                      <FormControl>
+                        <Textarea 
+                          placeholder="Observações adicionais..." 
+                          {...field}
+                          value={field.value || ""}
+                          data-testid="input-observacoes"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
 
-              <FormField
-                control={form.control}
-                name="morada"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Morada</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        {...field} 
-                        value={field.value || ""} 
-                        rows={2}
-                        data-testid="input-morada" 
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="observacoes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Observações</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        {...field} 
-                        value={field.value || ""} 
-                        rows={3}
-                        placeholder="Notas adicionais sobre a pessoa..."
-                        data-testid="input-observacoes" 
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
               <DialogFooter>
-                <Button 
-                  type="button" 
-                  variant="outline" 
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={() => setIsDialogOpen(false)}
                   data-testid="button-cancel"
                 >
@@ -708,189 +574,16 @@ export default function Pessoas() {
                 </Button>
                 <Button 
                   type="submit" 
-                  disabled={savePessoaMutation.isPending}
+                  disabled={saveUserMutation.isPending}
                   data-testid="button-save"
                 >
-                  {savePessoaMutation.isPending ? "A guardar..." : "Guardar"}
+                  {saveUserMutation.isPending ? "A guardar..." : "Guardar"}
                 </Button>
               </DialogFooter>
             </form>
           </Form>
         </DialogContent>
       </Dialog>
-
-      {/* Delete Pessoa Confirmation Dialog */}
-      <AlertDialog open={!!deletingPessoa} onOpenChange={() => setDeletingPessoa(null)}>
-        <AlertDialogContent data-testid="dialog-delete-pessoa">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar Eliminação</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem a certeza que deseja eliminar <strong>{deletingPessoa?.nome}</strong>? 
-              Esta ação não pode ser revertida.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-delete">Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deletingPessoa && deletePessoaMutation.mutate(deletingPessoa.id)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              data-testid="button-confirm-delete"
-            >
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Escalão Management Dialog */}
-      <Dialog open={isEscalaoDialogOpen} onOpenChange={setIsEscalaoDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh]" data-testid="dialog-escaloes">
-          <DialogHeader>
-            <DialogTitle>Gerir Escalões</DialogTitle>
-            <DialogDescription>
-              Configure os escalões disponíveis para os atletas.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="grid grid-cols-2 gap-6">
-            {/* Left side: Escalão form */}
-            <div className="space-y-4">
-              <h3 className="font-medium">
-                {editingEscalao ? "Editar Escalão" : "Novo Escalão"}
-              </h3>
-              <Form {...escalaoForm}>
-                <form onSubmit={escalaoForm.handleSubmit(handleSubmitEscalao)} className="space-y-4">
-                  <FormField
-                    control={escalaoForm.control}
-                    name="nome"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nome *</FormLabel>
-                        <FormControl>
-                          <Input {...field} placeholder="Ex: Infantis A" data-testid="input-escalao-nome" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={escalaoForm.control}
-                    name="descricao"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Descrição</FormLabel>
-                        <FormControl>
-                          <Textarea 
-                            {...field} 
-                            value={field.value || ""} 
-                            rows={3}
-                            placeholder="Descrição do escalão..."
-                            data-testid="input-escalao-descricao" 
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="flex gap-2">
-                    {editingEscalao && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          setEditingEscalao(null);
-                          escalaoForm.reset();
-                        }}
-                        data-testid="button-cancel-escalao"
-                      >
-                        Cancelar
-                      </Button>
-                    )}
-                    <Button 
-                      type="submit" 
-                      disabled={saveEscalaoMutation.isPending}
-                      className="flex-1"
-                      data-testid="button-save-escalao"
-                    >
-                      {saveEscalaoMutation.isPending ? "A guardar..." : "Guardar"}
-                    </Button>
-                  </div>
-                </form>
-              </Form>
-            </div>
-
-            {/* Right side: Escalões list */}
-            <div className="space-y-4">
-              <h3 className="font-medium">Escalões Existentes</h3>
-              <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                {escaloes.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Nenhum escalão criado.</p>
-                ) : (
-                  escaloes.map((escalao) => (
-                    <Card key={escalao.id} className="p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1">
-                          <p className="font-medium">{escalao.nome}</p>
-                          {escalao.descricao && (
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {escalao.descricao}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex gap-1">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8"
-                            onClick={() => handleOpenEscalaoDialog(escalao)}
-                            data-testid={`button-edit-escalao-${escalao.id}`}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8"
-                            onClick={() => setDeletingEscalao(escalao)}
-                            data-testid={`button-delete-escalao-${escalao.id}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </Card>
-                  ))
-                )}
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Escalão Confirmation Dialog */}
-      <AlertDialog open={!!deletingEscalao} onOpenChange={() => setDeletingEscalao(null)}>
-        <AlertDialogContent data-testid="dialog-delete-escalao">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmar Eliminação</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem a certeza que deseja eliminar o escalão <strong>{deletingEscalao?.nome}</strong>? 
-              Esta ação não pode ser revertida. Pessoas com este escalão ficarão sem escalão atribuído.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-delete-escalao">Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => deletingEscalao && deleteEscalaoMutation.mutate(deletingEscalao.id)}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              data-testid="button-confirm-delete-escalao"
-            >
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
