@@ -353,3 +353,61 @@
     inset: -1px;
   }
 }
+/* Uppy Styles - Basic modal and dashboard styles */
+.uppy-Root {
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.uppy-DashboardModal {
+  z-index: 1001;
+}
+
+.uppy-Dashboard--modal {
+  z-index: 1001;
+}
+
+.uppy-Dashboard-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+}
+
+.uppy-Dashboard-inner {
+  position: relative;
+  background: hsl(var(--background));
+  border-radius: 0.5rem;
+  max-width: 750px;
+  margin: 40px auto;
+  padding: 1.5rem;
+}
+
+.uppy-Dashboard-AddFiles {
+  border: 2px dashed hsl(var(--border));
+  border-radius: 0.5rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+.uppy-DragDrop-container {
+  border: 2px dashed hsl(var(--border));
+  border-radius: 0.5rem;
+  padding: 2rem;
+}
+
+.uppy-StatusBar {
+  background: hsl(var(--muted));
+  border-radius: 0.5rem;
+  margin-top: 1rem;
+  padding: 0.75rem;
+}
+
+.uppy-StatusBar-progress {
+  background: hsl(var(--primary));
+  border-radius: 0.25rem;
+  height: 4px;
+}

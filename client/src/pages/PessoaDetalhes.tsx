@@ -13,9 +13,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, User as UserIcon, Activity, Euro, Settings } from "lucide-react";
+import { ArrowLeft, Save, User as UserIcon, Activity, Euro, Settings, Upload } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { ObjectUploader } from "@/components/ObjectUploader";
+import type { UploadResult } from "@uppy/core";
 import { 
   upsertUserSchema,
   insertDadosDesportivosSchema,
@@ -199,7 +202,7 @@ export default function PessoaDetalhes() {
           <ConfiguracaoTab 
             userId={id!} 
             dadosConfiguracao={dadosConfiguracao}
-            userRole={user.role}
+            userRole={user.role ?? undefined}
           />
         </TabsContent>
       </Tabs>
@@ -258,6 +261,49 @@ function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] 
     },
   });
 
+  const uploadProfileImageMutation = useMutation({
+    mutationFn: async (profileImageUrl: string) => {
+      await apiRequest("PUT", "/api/profile-images", { profileImageUrl });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pessoas", user.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pessoas"] });
+      toast({
+        title: "Foto atualizada",
+        description: "Foto de perfil atualizada com sucesso.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Erro",
+        description: "Falha ao atualizar foto de perfil.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleGetUploadParameters = async () => {
+    const response = await fetch("/api/objects/upload", {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!response.ok) throw new Error("Failed to get upload URL");
+    const { uploadURL } = await response.json();
+    return {
+      method: "PUT" as const,
+      url: uploadURL,
+    };
+  };
+
+  const handleUploadComplete = (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    if (result.successful && result.successful.length > 0) {
+      const uploadedUrl = result.successful[0].uploadURL;
+      if (uploadedUrl) {
+        uploadProfileImageMutation.mutate(uploadedUrl);
+      }
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -266,6 +312,27 @@ function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] 
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit((data) => updateUserMutation.mutate(data))} className="space-y-6">
+            <div className="flex items-center gap-4 pb-6 border-b">
+              <Avatar className="h-24 w-24">
+                <AvatarImage src={user.profileImageUrl ?? undefined} alt={user.name || ""} />
+                <AvatarFallback className="text-2xl">
+                  {user.name ? user.name.charAt(0).toUpperCase() : <UserIcon className="h-12 w-12" />}
+                </AvatarFallback>
+              </Avatar>
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">Foto de Perfil</p>
+                <ObjectUploader
+                  maxNumberOfFiles={1}
+                  maxFileSize={5242880}
+                  onGetUploadParameters={handleGetUploadParameters}
+                  onComplete={handleUploadComplete}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Carregar Foto
+                </ObjectUploader>
+              </div>
+            </div>
+
             <div className="grid grid-cols-3 gap-4">
               <FormField
                 control={form.control}
