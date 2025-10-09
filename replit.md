@@ -27,6 +27,10 @@ The application uses React with TypeScript for the frontend, Express.js for the 
 - ✅ Data migration completed: pessoas → users (1 record migrated successfully)
 - ✅ Automatic cost center distribution logic implemented and tested
 - ✅ Automatic invoice generation system fully operational
+- ✅ Dashboard with real-time statistics (athletes, activities, revenue, attendance)
+- ✅ Pessoas page migrated to users table with full CRUD
+- ✅ Empty string sanitization in API endpoints (POST/PUT /api/users)
+- ✅ All E2E tests passed successfully
 
 **Business Logic Implemented:**
 
