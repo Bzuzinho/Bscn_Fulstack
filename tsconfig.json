@@ -2,17 +2,19 @@
   "include": ["client/src/**/*", "shared/**/*", "server/**/*"],
   "exclude": ["node_modules", "build", "dist", "**/*.test.ts"],
   "compilerOptions": {
+    "target": "ES2019",
     "incremental": true,
     "tsBuildInfoFile": "./node_modules/typescript/tsbuildinfo",
     "noEmit": true,
-    "module": "ESNext",
+    "module": "commonjs",
     "strict": true,
     "lib": ["esnext", "dom", "dom.iterable"],
     "jsx": "preserve",
     "esModuleInterop": true,
     "skipLibCheck": true,
     "allowImportingTsExtensions": true,
-    "moduleResolution": "bundler",
+    "moduleResolution": "node",
+    "outDir": "dist"
     "baseUrl": ".",
     "types": ["node", "vite/client"],
     "paths": {
@@ -20,4 +22,9 @@
       "@shared/*": ["./shared/*"]
     }
   }
+}
+"scripts": {
+  "dev": "NODE_ENV=development ts-node --transpile-only server/index.ts",
+  "build": "tsc -p tsconfig.json",
+  "start": "NODE_ENV=production node dist/server/index.js"
 }

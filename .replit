@@ -1,50 +1,20 @@
-modules = ["nodejs-20", "web", "postgresql-16"]
-run = "npm run dev"
-hidden = [".config", ".git", "generated-icon.png", "node_modules", "dist"]
+run = "bash -lc 'php artisan serve --host 0.0.0.0 --port 8000 & npm run dev -- --host 0.0.0.0 --port 5173; wait'"
 
-[nix]
-channel = "stable-24_05"
-packages = ["php83", "php83Packages.composer"]
+onBoot = """
+bash -lc '
+  [ -f .env ] || cp .env.example .env || true
+  composer install --no-interaction --prefer-dist
+  php artisan key:generate || true
+  php artisan storage:link || true
 
-[deployment]
-deploymentTarget = "autoscale"
-build = ["npm", "run", "build"]
-run = ["npm", "run", "start"]
-
-[[ports]]
-localPort = 5000
-externalPort = 80
-
-[[ports]]
-localPort = 35565
-externalPort = 3000
-
-[env]
-PORT = "5000"
-
-[workflows]
-runButton = "Project"
-
-[[workflows.workflow]]
-name = "Project"
-mode = "parallel"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "run"
-
-[[workflows.workflow]]
-name = "run"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "./main.sh --help"
-
-[workflows.workflow.metadata]
-outputType = "console"
+  # Se usas Laravel+Vite no /resources:
+  [ -f package-lock.json ] && npm ci || npm install
+'
+"""
+modules = ["nodejs-20", "php-8.3"]
 
 [agent]
-integrations = ["javascript_log_in_with_replit:1.0.0", "javascript_database:1.0.0"]
 expertMode = true
+
+[nix]
+channel = "stable-25_05"
