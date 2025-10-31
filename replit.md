@@ -1,217 +1,103 @@
-# Swimming Club Management System
+# Ambiente Full-Stack Laravel + Vite
 
-## Overview
+## Visão Geral
+Projeto full-stack com backend Laravel (PHP 8.3) e frontend Vite/React (Node 20) configurado para desenvolvimento automático no Replit. Criado e configurado em 31 de Outubro de 2025.
 
-This is a comprehensive management system for swimming clubs, built with a modern full-stack architecture. The system manages athletes, activities (training, competitions, camps), financials, inventory, sponsorships, sales, marketing, and communications. It's designed for administrators, coaches, and members to efficiently handle all aspects of club operations with support for 80 athletes/year scalable to 240.
+## Estrutura do Projeto
 
-The application uses React with TypeScript for the frontend, Express.js for the backend, and PostgreSQL (via Neon) for data persistence. The UI is built with shadcn/ui components following Material Design 3 principles with club branding (navy blue #003366, yellow #FFD700), supporting both light and dark modes.
+### Backend
+- **Diretório:** `backend/`
+- **Framework:** Laravel (PHP 8.3)
+- **Porta:** 3000 (interna)
+- **Base de Dados:** SQLite
+- **Gestor de Pacotes:** Composer
 
-## Recent Changes (October 2025)
+### Frontend
+- **Diretório:** `client/`
+- **Framework:** Vite + React 18 + TypeScript
+- **Porta:** 5000 (exposta ao público)
+- **Gestor de Pacotes:** npm (Node 20)
+- **Proxy:** `/api` → `http://127.0.0.1:3000`
 
-**Major Database Expansion - All Tables Created:**
-- ✅ Expanded users table with ~30 fields (consolidated from pessoas)
-- ✅ Implemented complete RBAC system (5 tables)
-- ✅ Created RGPD compliance module (dados_configuracao)
-- ✅ Expanded Escalões with historical tracking (user_escaloes)
-- ✅ Added Sports & Health data (dados_desportivos, saude_atletas)
-- ✅ Refined Treinos/Presenças with new structure (presencas_novo)
-- ✅ Complete Events system (5 tables: eventos, eventos_tipos, convocatorias, evento_escalao, eventos_users)
-- ✅ Complete Financial module (8 tables) with automatic invoicing and cost centers
-- ✅ Sponsorships module (4 tables: patrocinadores, patrocinios, patrocinio_parcelas, patrocinio_metricas)
-- ✅ Sales & Stock module (4 tables: produtos, movimentos_stock, vendas, venda_itens)
-- ✅ Marketing/Communication module (4 tables: noticias, campanhas, campanha_logs, crm_interacoes)
-- ✅ All foreign keys configured and schema synchronized
-- ✅ TypeScript compilation validated
+### Scripts
+- **run.sh:** Arranca Laravel (porta 3000) em background e Vite (porta 5000) em foreground
 
-**Latest Implementation (October 2025):**
-- ✅ Data migration completed: pessoas → users (1 record migrated successfully)
-- ✅ Automatic cost center distribution logic implemented and tested
-- ✅ Automatic invoice generation system fully operational
-- ✅ Dashboard with real-time statistics (athletes, activities, revenue, attendance)
-- ✅ Pessoas page migrated to users table with full CRUD
-- ✅ Empty string sanitization in API endpoints (POST/PUT /api/pessoas)
-- ✅ **Individual User Management System:**
-  - Created detailed user page (/pessoas/:id) with 4-tab interface
-  - Tab 1: Dados Pessoais (complete user profile editing)
-  - Tab 2: Dados Desportivos (sports data, training, results)
-  - Tab 3: Dados Financeiros (invoices, payments, account summary)
-  - Tab 4: Configuração (RGPD consents, permissions, documents)
-  - Navigation: Click on user card → detailed page
-  - API endpoints: /api/pessoas/:id with sub-resources
-  - Fixed schema: escaloes table aligned with database structure
-- ✅ All E2E tests passed successfully
+## Alterações Recentes
 
-**Business Logic Implemented:**
+### 2025-10-31: Configuração Full-Stack
+- Instalado PHP 8.3 e Node.js 20
+- Instalado Composer, SQLite, Git, unzip
+- Configurado Vite com proxy para Laravel
+- Criado endpoint `/api/ping` que retorna `{"status": "ok"}`
+- Configurado workflow automático com `bash ./run.sh`
+- Ajustada porta do Vite para 5000 (requisito do Replit para webview)
+- Corrigidos erros de sintaxe JSON em package.json e tsconfig.json
+- Removidos scripts Bash antigos (main.sh, example.sh, utils.sh)
+- Testado e validado comunicação frontend ↔ backend
 
-**1. Cost Center Distribution System:**
-- Automatic creation of cost centers for each escalão
-- "Clube Genérico" center for non-specific expenses
-- Function: `calcular_distribuicao_centros_custo()` - calculates proportional distribution based on active athletes
-- Function: `distribuir_despesa_por_escaloes(valor, descricao, data)` - distributes expenses across escalões
-- Trigger: `trigger_recalcular_distribuicao` - auto-recalculates when users change escalão/status
-- Current distribution: Master 100% (1 athlete)
+## Arquitetura
 
-**2. Automatic Invoice Generation System:**
-- Function: `gerar_faturas_anuais(user_id, epoca, data_inicio)` - generates 11 monthly invoices (Sep-Jul)
-- Function: `atualizar_estados_faturas()` - automatic state transitions (futuro → pendente → em_divida)
-- Function: `marcar_fatura_paga(fatura_id, recibo, referencia)` - marks invoice as paid
-- Invoice states: futuro, pendente, em_divida, paga, cancelada
-- Automatic invoice items creation with monthly fee
-- Integration with tipos_mensalidade for custom pricing
+### Fluxo de Comunicação
+```
+Browser → Replit (porta 5000) → Vite Dev Server → Proxy /api → Laravel (porta 3000)
+```
 
-## User Preferences
+### Arranque Automático
+1. Laravel arranca na porta 3000 em background
+2. Vite arranca na porta 5000 em foreground (exposto ao público)
+3. Ao parar o workflow, o Laravel é automaticamente terminado
 
-Preferred communication style: Simple, everyday language.
+### Configuração de Proxy
+O Vite está configurado para encaminhar todas as requisições `/api/*` para `http://127.0.0.1:3000`, permitindo comunicação transparente com o backend.
 
-## System Architecture
+## Dependências do Sistema
 
-### Frontend Architecture
+- **Node.js:** 20
+- **PHP:** 8.3
+- **Composer:** (via php83Packages.composer)
+- **SQLite:** Incluído
+- **Git:** Incluído
+- **Unzip:** Incluído
 
-**Framework & Build Tool:**
-- React 18 with TypeScript for type-safe component development
-- Vite as the build tool and development server
-- Wouter for client-side routing (lightweight alternative to React Router)
+## Preferências do Utilizador
 
-**State Management:**
-- TanStack Query (React Query) for server state management and API caching
-- React Hook Form with Zod for form validation and state
-- React Context for theme management (light/dark mode)
+- Comunicação em Português
+- Ambiente Laravel + Vite full-stack
+- Arranque automático ao clicar em "Run"
+- Frontend na porta 5000, backend na porta 3000
 
-**UI Component System:**
-- shadcn/ui component library based on Radix UI primitives
-- Tailwind CSS for styling with custom design tokens
-- Material Design 3 principles with custom refinements
-- HSL-based color system supporting dark mode
-- Custom fonts: Inter (UI/body), JetBrains Mono (data/numbers)
+## Endpoints da API
 
-**Design System:**
-- Utility-focused with information-dense layouts
-- Consistent component patterns across 7 main modules
-- Role-based UX considerations
-- Responsive design with mobile breakpoint at 768px
+### GET /api/ping
+Endpoint de teste que retorna:
+```json
+{
+  "status": "ok",
+  "time": "2025-10-31T19:55:09.549811Z"
+}
+```
 
-### Backend Architecture
+**Testado com sucesso via:**
+- Direto: `http://127.0.0.1:3000/api/ping` ✅
+- Proxy: `http://127.0.0.1:5000/api/ping` ✅
 
-**Server Framework:**
-- Express.js with TypeScript
-- ESM module system
-- Session-based authentication using Replit Auth (OIDC)
+## Notas Técnicas
 
-**API Design:**
-- RESTful endpoints under `/api` prefix
-- Resource-based routing (e.g., `/api/pessoas`, `/api/atividades`)
-- Authentication middleware protecting all routes
-- JSON request/response format
+### Porta 5000
+O Replit requer que aplicações web com `output_type: webview` usem a porta 5000. Por isso, o Vite foi configurado para essa porta em vez da padrão (5173).
 
-**Authentication & Authorization:**
-- Replit Auth (OpenID Connect) for user authentication
-- Session management with connect-pg-simple (PostgreSQL session store)
-- User information stored in database with OIDC claims
-- Protected routes requiring authentication
+### Hot Reload
+Ambos os ambientes suportam hot reload:
+- Laravel: Reflete alterações ao recarregar a página
+- Vite: Hot Module Replacement (HMR) automático
 
-**Data Access Layer:**
-- Storage abstraction pattern (`storage.ts`) providing a clean interface
-- CRUD operations for all entities (pessoas, escaloes, atividades, etc.)
-- Centralized database access through storage methods
+## Estado Atual
 
-### Data Storage
-
-**Database:**
-- PostgreSQL via Neon serverless
-- Drizzle ORM for type-safe database access
-- WebSocket connection pooling for serverless environments
-
-**Schema Design:**
-- **Core Auth Tables:**
-  - users: Expanded with ~30 fields (numeroSocio, NIF, contacts, address, personal info, relations)
-  - sessions: PostgreSQL session store for Replit Auth
-  
-- **RBAC System (5 tables):**
-  - roles, permissions
-  - role_has_permissions, model_has_roles, model_has_permissions
-  
-- **RGPD & Compliance:**
-  - dados_configuracao: Consent management, document storage
-  
-- **People & Relations:**
-  - user_escaloes: Historical escalão assignments (N:N)
-  - encarregado_user: Guardian relationships
-  
-- **Sports & Health:**
-  - dados_desportivos: Height, weight, medical certificates, federation data
-  - saude_atletas: Legacy health records
-  
-- **Training & Results:**
-  - treinos: Training sessions
-  - presencas_novo: New attendance structure (user-based)
-  - resultados: Competition results
-  
-- **Events System (5 tables):**
-  - eventos, eventos_tipos, convocatorias
-  - evento_escalao (N:N), eventos_users (N:N with attendance)
-  
-- **Financial Module (8 tables):**
-  - tipos_mensalidade, dados_financeiros
-  - faturas (auto-generation support), fatura_itens, catalogo_fatura_itens
-  - centros_custo (escalões, departments, generic)
-  - lancamentos_financeiros, extratos_bancarios, mapa_conciliacao
-  
-- **Sponsorships (4 tables):**
-  - patrocinadores, patrocinios, patrocinio_parcelas, patrocinio_metricas
-  
-- **Sales & Stock (4 tables):**
-  - produtos, movimentos_stock, vendas, venda_itens
-  
-- **Marketing/Communication (4 tables):**
-  - noticias, campanhas, campanha_logs, crm_interacoes
-  
-- **Legacy Tables (to be deprecated):**
-  - pessoas, atividades, presencas, mensalidades, materiais, emprestimos, emails
-  
-- Zod schemas generated from Drizzle for runtime validation
-- All foreign keys properly configured with cascade/set null policies
-
-**Data Validation:**
-- Drizzle Zod for schema-based validation
-- Server-side validation before database operations
-- Client-side form validation with React Hook Form + Zod
-
-### Module Structure
-
-**7 Main Application Modules:**
-
-1. **Gestão de Pessoas (People Management):** Athletes, members, coaches, guardians with personal data, age groups, RGPD compliance
-2. **Atividades & Eventos (Activities & Events):** Groups/classes, training sessions, competitions, camps, meetings with attendance tracking
-3. **Financeiro (Financial):** Monthly fees, quotas, invoices, payments, bank accounts, accounting codes
-4. **Inventário (Inventory):** Equipment categories, locations, stock management, loans, maintenance tracking
-5. **Comunicação (Communication):** Email and SMS sending, templates, scheduling, campaigns
-6. **Configurações (Settings):** Club profile, general settings, permissions, external integrations
-7. **Relatórios (Reports):** Dashboard with KPIs, statistics, data exports (PDF, CSV, Excel)
-
-### External Dependencies
-
-**Third-party UI Libraries:**
-- Radix UI primitives (accordion, dialog, dropdown, etc.)
-- Lucide React for iconography
-- date-fns for date manipulation with Portuguese locale
-- cmdk for command palette functionality
-
-**Development Tools:**
-- TypeScript for type safety across the stack
-- ESBuild for production server bundling
-- Replit-specific plugins for development (cartographer, dev-banner, runtime-error-modal)
-
-**Authentication Service:**
-- Replit Auth (OpenID Connect provider)
-- Passport.js with openid-client strategy
-
-**Database Service:**
-- Neon Serverless PostgreSQL
-- Connection pooling with @neondatabase/serverless
-- WebSocket support for serverless environments
-
-**Notable Features:**
-- Session persistence in PostgreSQL
-- Auto-generated UUID for user IDs
-- Environment-based configuration (DATABASE_URL, SESSION_SECRET, REPL_ID)
-- CORS and security headers configured for Replit domains
+✅ PHP 8.3 instalado e funcional
+✅ Node.js 20 instalado e funcional  
+✅ Laravel a correr na porta 3000
+✅ Vite a correr na porta 5000
+✅ Proxy /api funcional
+✅ Endpoint /api/ping testado e validado
+✅ Workflow configurado e a funcionar
+✅ Comunicação frontend ↔ backend confirmada

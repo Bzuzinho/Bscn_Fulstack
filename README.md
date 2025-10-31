@@ -1,95 +1,151 @@
-# Bash Scripting Template
+# Laravel + Vite Full-Stack Application
 
-A comprehensive Bash scripting template with best practices, examples, and common patterns.
+Ambiente full-stack funcional com Laravel (backend) e Vite/React (frontend) configurado para desenvolvimento no Replit.
 
-## Files
+## Estrutura do Projeto
 
-- **main.sh** - Main script template with argument parsing, error handling, and structured functions
-- **example.sh** - Examples demonstrating common Bash patterns and operations
-- **utils.sh** - Reusable utility functions for other scripts
+```
+.
+├── backend/          # Laravel PHP 8.3 (porta 3000)
+├── client/           # Vite + React + TypeScript (porta 5000)
+└── run.sh           # Script de arranque automático
+```
 
-## Features
+## Tecnologias
 
-- ✅ Proper shebang and strict mode (`set -euo pipefail`)
-- ✅ Command-line argument parsing
-- ✅ Error handling and logging
-- ✅ Modular function design
-- ✅ Usage documentation
-- ✅ Example patterns and operations
+### Backend (Laravel)
+- PHP 8.3
+- Laravel Framework
+- SQLite
+- Composer
 
-## Usage
+### Frontend (Vite/React)
+- Node.js 20
+- Vite
+- React 18
+- TypeScript
+- Proxy configurado: `/api` → `http://127.0.0.1:3000`
 
-### Main Script
+## Como Usar
+
+### Arranque Automático
+
+Basta clicar em **Run** no Replit. O script `run.sh` irá:
+1. Arrancar o Laravel na porta 3000 (background)
+2. Arrancar o Vite na porta 5000 (foreground)
+3. Ao parar, mata automaticamente o processo do Laravel
+
+### Desenvolvimento Manual
 
 ```bash
-# Show help
-./main.sh --help
+# Backend (Laravel)
+cd backend
+php artisan serve --host 0.0.0.0 --port 3000
 
-# Basic usage
-./main.sh --name "Your Name"
-
-# With verbose output
-./main.sh -v --name "Your Name"
-
-# Save output to file
-./main.sh --name "Your Name" --output results.txt
+# Frontend (Vite) - noutro terminal
+cd client
+npm run dev
 ```
 
-### Examples
+## Endpoints da API
 
+### Teste de Conexão
 ```bash
-# Run examples
-./example.sh
+GET /api/ping
 ```
 
-### Using Utilities
+**Resposta:**
+```json
+{
+  "status": "ok",
+  "time": "2025-10-31T19:55:09.549811Z"
+}
+```
 
+**Teste via frontend:**
 ```bash
-# Source utilities in your own scripts
-source ./utils.sh
-
-# Use utility functions
-is_command_available "git"
-validate_file "/path/to/file"
+curl http://127.0.0.1:5000/api/ping
 ```
 
-## Best Practices Implemented
-
-1. **Strict Mode**: `set -euo pipefail` ensures scripts fail fast on errors
-2. **Argument Parsing**: Clean handling of command-line options
-3. **Error Handling**: Proper exit codes and error messages
-4. **Logging**: Timestamped log messages
-5. **Documentation**: Built-in help and usage information
-6. **Modularity**: Reusable functions and utilities
-
-## Script Structure
-
-```
-├── main.sh       # Main script template
-├── example.sh    # Pattern examples
-├── utils.sh      # Utility functions
-└── README.md     # Documentation
+**Teste via backend direto:**
+```bash
+curl http://127.0.0.1:3000/api/ping
 ```
 
-## Common Patterns
+## Configuração
 
-### Variables
-- Use `local` for function variables
-- Quote variables: `"$var"` not `$var`
-- Use `${var}` for clarity
+### Proxy do Vite
 
-### Functions
-- One purpose per function
-- Return meaningful exit codes
-- Use `local` for all function variables
+O ficheiro `client/vite.config.ts` está configurado para encaminhar todas as chamadas `/api` para o Laravel:
 
-### Error Handling
-- Check command success with `if`
-- Use `set -e` to exit on errors
-- Provide meaningful error messages
+```typescript
+server: {
+  proxy: {
+    '/api': {
+      target: 'http://127.0.0.1:3000',
+      changeOrigin: true,
+      secure: false,
+    },
+  },
+}
+```
 
-## Learn More
+### Variáveis de Ambiente
 
-- [Bash Manual](https://www.gnu.org/software/bash/manual/)
-- [ShellCheck](https://www.shellcheck.net/) - Script analysis tool
-- [Google Shell Style Guide](https://google.github.io/styleguide/shellguide.html)
+O Laravel usa `.env` (criado automaticamente a partir de `.env.example`).
+
+## Portas
+
+- **Frontend (Vite):** 5000 (exposta pelo Replit)
+- **Backend (Laravel):** 3000 (interna)
+
+> **Nota:** O Replit requer que aplicações web usem a porta 5000 para exposição pública.
+
+## Comandos Úteis
+
+### Laravel
+```bash
+cd backend
+php artisan route:list    # Listar rotas
+php artisan migrate       # Executar migrations
+php artisan tinker        # Console interativa
+```
+
+### Frontend
+```bash
+cd client
+npm run build            # Build para produção
+npm run preview          # Preview do build
+```
+
+## Desenvolvimento
+
+Ambos os servidores suportam **hot reload**:
+- Alterações no código Laravel são refletidas imediatamente
+- Alterações no código React/Vite atualizam automaticamente o browser
+
+## Troubleshooting
+
+### Laravel não arranca
+```bash
+cd backend
+composer install
+php artisan key:generate
+```
+
+### Frontend não arranca
+```bash
+cd client
+rm -rf node_modules package-lock.json
+npm install
+```
+
+### Proxy não funciona
+Verifique que o Laravel está a correr na porta 3000:
+```bash
+curl http://127.0.0.1:3000/api/ping
+```
+
+## Licença
+
+MIT

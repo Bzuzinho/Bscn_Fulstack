@@ -8,7 +8,7 @@ php artisan serve --host 0.0.0.0 --port 3000 &
 BACK_PID=$!
 
 # ---- ARRANQUE FRONTEND (Vite) ----
-echo "🌐 A iniciar Vite (porta 5173)..."
+echo "🌐 A iniciar Vite (porta 5000)..."
 cd ../client
 npm run dev
 

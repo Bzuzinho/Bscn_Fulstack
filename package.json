@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "NODE_ENV=development ts-node --transpile-only server/index.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "NODE_ENV=production node dist/server/index.js"
+    "start": "NODE_ENV=production node dist/server/index.js",
     "check": "tsc",
     "db:push": "drizzle-kit push"
   },
