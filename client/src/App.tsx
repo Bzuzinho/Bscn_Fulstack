@@ -7,6 +7,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { useAuth } from "@/hooks/useAuth";
+import { useEffect, useState } from "react";
 import Landing from "@/pages/Landing";
 import Dashboard from "@/pages/Dashboard";
 import Pessoas from "@/pages/Pessoas";
@@ -64,16 +65,20 @@ function AppContent() {
   );
 }
 
-function App() {
+export default function App() {
+  const [msg, setMsg] = useState("A verificar backend...");
+
+  useEffect(() => {
+    fetch("/api/ping")
+      .then((r) => r.json())
+      .then((d) => setMsg(`Backend online ✅ ${d.time}`))
+      .catch((e) => setMsg(`Backend OFF ❌ (${e.message})`));
+  }, []);
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider defaultTheme="light">
-        <TooltipProvider>
-          <AppContent />
-        </TooltipProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
+    <div style={{ padding: 16, fontFamily: "system-ui" }}>
+      <h1>SwimClubManager</h1>
+      <p>{msg}</p>
+    </div>
   );
 }
-
-export default App;

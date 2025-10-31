@@ -1,0 +1,18 @@
+# --- CONFIGURAÇÃO LIMPA LARAVEL + VITE ---
+
+run = "bash ./run.sh"
+hidden = [".config", ".git", "node_modules", "dist", "vendor"]
+
+[nix]
+channel = "stable-23.05"
+
+[env]
+PORT = "5173"
+
+[[ports]]
+localPort = 5173
+externalPort = 3002
+
+[[ports]]
+localPort = 3000
+externalPort = 3003
