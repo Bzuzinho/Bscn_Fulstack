@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import Landing from "@/pages/Landing";
 import Dashboard from "@/pages/Dashboard";
 import Pessoas from "@/pages/Pessoas";
-import PessoaDetalhes from "@/pages/PessoaDetalhes.tsx";
+import PessoaDetalhes from "@/pages/PessoaDetalhes";
 import Atividades from "@/pages/Atividades";
 import Financeiro from "@/pages/Financeiro";
 import Inventario from "@/pages/Inventario";
@@ -66,19 +66,13 @@ function AppContent() {
 }
 
 export default function App() {
-  const [msg, setMsg] = useState("A verificar backend...");
-
-  useEffect(() => {
-    fetch("/api/ping")
-      .then((r) => r.json())
-      .then((d) => setMsg(`Backend online ✅ ${d.time}`))
-      .catch((e) => setMsg(`Backend OFF ❌ (${e.message})`));
-  }, []);
-
   return (
-    <div style={{ padding: 16, fontFamily: "system-ui" }}>
-      <h1>SwimClubManager</h1>
-      <p>{msg}</p>
-    </div>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <AppContent />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }

@@ -124,7 +124,53 @@ Ambos os servidores suportam **hot reload**:
 - Alterações no código Laravel são refletidas imediatamente
 - Alterações no código React/Vite atualizam automaticamente o browser
 
+## Dependências Instaladas
+
+### Frontend (336 pacotes)
+- React 18.3 + React DOM
+- Wouter (routing)
+- TanStack Query (data fetching)
+- Radix UI (todos os componentes: accordion, dialog, dropdown, etc)
+- Tailwind CSS 3 + Tailwind Merge + Tailwind Animate
+- Lucide React (ícones)
+- React Hook Form + Zod (formulários e validação)
+- Framer Motion (animações)
+- Next Themes (tema escuro/claro)
+- Date-fns, Recharts, Embla Carousel, e muito mais
+
+### Backend
+- Laravel 11
+- PHP 8.3
+- SQLite
+
 ## Troubleshooting
+
+### Página em Branco (Importante!)
+
+Se vir uma página completamente em branco ao abrir a aplicação:
+
+1. **Force um refresh completo** no navegador:
+   - **Windows/Linux**: `Ctrl + Shift + R`
+   - **Mac**: `Cmd + Shift + R`
+
+2. **Limpe o cache do navegador**:
+   - Abra as ferramentas de desenvolvedor (F12)
+   - Clique com o botão direito no ícone de refresh
+   - Selecione "Empty Cache and Hard Reload"
+
+3. **Verifique os logs**:
+   - Os logs no painel do Replit devem mostrar:
+     ```
+     VITE v5.4.21  ready in XXX ms
+     ➜  Local:   http://localhost:5000/
+     INFO  Server running on [http://0.0.0.0:3000]
+     ```
+
+4. **Teste a API diretamente**:
+   - Aceda a `/api/ping` no navegador
+   - Deve retornar: `{"status":"ok","time":"..."}`
+
+**Nota:** O iframe do Replit pode fazer cache agressivo. Um hard refresh resolve o problema.
 
 ### Laravel não arranca
 ```bash
