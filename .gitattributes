@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.php diff=php
+*.ts diff=ts
+*.tsx diff=ts
+*.js diff=js
+*.css diff=css
+*.md diff=markdown
