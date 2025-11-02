@@ -11,15 +11,14 @@ class AuthController extends Controller
 {
     public function user(Request $request)
     {
-        $userId = $request->header('X-Replit-User-Id') ?? 'test-user-id';
+        $email = $request->header('X-Replit-User-Email') ?? 'admin@benedita.pt';
+        $name = $request->header('X-Replit-User-Name') ?? 'Admin Benedita';
         
         $user = User::firstOrCreate(
-            ['id' => $userId],
+            ['email' => $email],
             [
-                'email' => $request->header('X-Replit-User-Email') ?? 'test@example.com',
-                'first_name' => $request->header('X-Replit-User-Name') ?? 'Test',
-                'last_name' => 'User',
-                'name' => $request->header('X-Replit-User-Name') ?? 'Test User',
+                'name' => $name,
+                'password' => Hash::make('password123'),
             ]
         );
 

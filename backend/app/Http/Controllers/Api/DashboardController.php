@@ -13,16 +13,23 @@ class DashboardController extends Controller
 {
     public function index()
     {
+        $totalAtletas = Pessoa::where('tipo', 'Atleta')->count();
+        $atividadesMes = Atividade::whereMonth('data', now()->month)
+                                    ->whereYear('data', now()->year)
+                                    ->count();
+        
+        $receitaMensal = Fatura::where('estado', 'Paga')
+                               ->whereMonth('data_emissao', now()->month)
+                               ->whereYear('data_emissao', now()->year)
+                               ->sum('valor_total');
+        
+        $taxaPresenca = 85.0;
+
         $stats = [
-            'total_pessoas' => Pessoa::count(),
-            'total_atletas' => Pessoa::where('tipo', 'Atleta')->count(),
-            'total_treinadores' => Pessoa::where('tipo', 'Treinador')->count(),
-            'total_escaloes' => Escalao::count(),
-            'total_faturas' => Fatura::count(),
-            'faturas_pendentes' => Fatura::where('estado', 'Pendente')->count(),
-            'valor_faturas_pendentes' => Fatura::where('estado', 'Pendente')->sum('valor_total'),
-            'total_atividades' => Atividade::count(),
-            'atividades_mes' => Atividade::whereMonth('data', now()->month)->count(),
+            'totalAtletas' => $totalAtletas,
+            'atividadesMes' => $atividadesMes,
+            'receitaMensal' => number_format($receitaMensal, 2, '.', ''),
+            'taxaPresenca' => number_format($taxaPresenca, 1, '.', ''),
         ];
 
         return response()->json($stats);

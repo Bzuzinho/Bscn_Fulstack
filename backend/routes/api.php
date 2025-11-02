@@ -14,12 +14,17 @@ use Illuminate\Support\Facades\Route;
 // Health check
 Route::get('/ping', fn () => response()->json(['status' => 'ok', 'time' => now()]));
 
-// Auth routes
+// Auth routes (com e sem prefixo para compatibilidade)
 Route::prefix('auth')->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/logout', [AuthController::class, 'logout']);
 });
+
+// Rotas de autenticação sem prefixo (compatibilidade com frontend)
+Route::post('/login', [AuthController::class, 'login']);
+Route::post('/logout', [AuthController::class, 'logout']);
+Route::get('/user', [AuthController::class, 'user']);
 
 // Escaloes routes
 Route::apiResource('escaloes', EscalaoController::class);
