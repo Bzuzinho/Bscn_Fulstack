@@ -29,7 +29,7 @@ class FaturaController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'numero' => 'required|string|unique:faturas',
+            'numero' => 'required|string|unique:financeiro_tables',
             'pessoa_id' => 'required|integer|exists:pessoas,id',
             'data_emissao' => 'required|date',
             'data_vencimento' => 'required|date',
@@ -53,7 +53,7 @@ class FaturaController extends Controller
         $fatura = Fatura::findOrFail($id);
         
         $validated = $request->validate([
-            'numero' => 'sometimes|string|unique:faturas,numero,' . $id,
+            'numero' => 'sometimes|string|unique:financeiro_tables,numero,' . $id,
             'pessoa_id' => 'sometimes|integer|exists:pessoas,id',
             'data_emissao' => 'sometimes|date',
             'data_vencimento' => 'sometimes|date',
