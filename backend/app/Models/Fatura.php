@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Fatura extends Model
 {
-    protected $table = 'faturas';
+    protected $table = 'financeiro_tables';
 
     protected $fillable = [
         'numero', 'pessoa_id', 'data_emissao', 'data_vencimento',
