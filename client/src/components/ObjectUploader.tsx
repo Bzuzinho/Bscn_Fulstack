@@ -2,10 +2,13 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import Uppy from "@uppy/core";
-import { DashboardModal } from "@uppy/react";
+import DashboardModal from "@uppy/react/dashboard-modal";
 import AwsS3 from "@uppy/aws-s3";
 import type { UploadResult } from "@uppy/core";
 import { Button } from "@/components/ui/button";
+
+// Note: Uppy CSS is loaded via CDN in index.html
+// Direct imports don't work due to Uppy's package.json structure
 
 interface ObjectUploaderProps {
   maxNumberOfFiles?: number;

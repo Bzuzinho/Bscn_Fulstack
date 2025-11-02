@@ -14,3 +14,5 @@ npm run dev
 
 # ---- LIMPEZA ----
 kill $BACK_PID 2>/dev/null || true
+bash scripts/docs_watch.sh &   # <— arranca o watcher em background
+# arranca Laravel e Vite como já fazes

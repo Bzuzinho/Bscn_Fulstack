@@ -124,9 +124,20 @@ Ambos os servidores suportam **hot reload**:
 - Alterações no código Laravel são refletidas imediatamente
 - Alterações no código React/Vite atualizam automaticamente o browser
 
+## Problemas Resolvidos
+
+### Erro "Blocked request. This host is not allowed"
+**Solução aplicada:** Adicionado `allowedHosts: true` no `client/vite.config.ts` na seção `server`. Isso é **obrigatório** para o Vite funcionar no ambiente Replit, pois permite que o servidor aceite pedidos do domínio dinâmico do Replit.
+
+### Erro "DashboardModal is not found"
+**Solução aplicada:** 
+1. Instalados pacotes Uppy: `@uppy/core`, `@uppy/react`, `@uppy/dashboard`, `@uppy/aws-s3`
+2. Corrigido import de `import { DashboardModal } from "@uppy/react"` para `import DashboardModal from "@uppy/react/dashboard-modal"`
+3. CSS do Uppy carregado via CDN no `index.html`
+
 ## Dependências Instaladas
 
-### Frontend (336 pacotes)
+### Frontend (366 pacotes)
 - React 18.3 + React DOM
 - Wouter (routing)
 - TanStack Query (data fetching)

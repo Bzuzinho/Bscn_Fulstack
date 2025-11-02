@@ -8,6 +8,7 @@
     pkgs.git
     pkgs.nodejs       # Já sabemos que existe
     pkgs.php          # Teste: versão default suportada pelo nixpkgs
+    pkgs.entr
   ];
 
   shellHook = ''
