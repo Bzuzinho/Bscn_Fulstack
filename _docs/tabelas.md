@@ -1,1 +1,2 @@
-# Tabelas (auto)
+# Tabelas
+*(DB não encontrada; corre migrations)*

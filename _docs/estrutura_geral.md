@@ -1,1 +1,6 @@
-# Estrutura (auto)
+# Estrutura Geral
+## Backend
+
+## Rotas
+
+## Frontend
