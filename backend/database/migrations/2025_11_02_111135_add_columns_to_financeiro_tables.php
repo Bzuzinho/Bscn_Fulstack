@@ -6,6 +6,10 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    /**
+     * Disable automatic transaction wrapping for this migration.
+     */
+    public $withinTransaction = false;
     public function up(): void
     {
         Schema::table('financeiro_tables', function (Blueprint $table) {

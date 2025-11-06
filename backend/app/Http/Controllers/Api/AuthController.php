@@ -6,14 +6,30 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Auth;
 
 class AuthController extends Controller
 {
     public function user(Request $request)
     {
-        $email = $request->header('X-Replit-User-Email') ?? 'admin@benedita.pt';
-        $name = $request->header('X-Replit-User-Name') ?? 'Admin Benedita';
-        
+        // Prefer session-based authentication (Auth::user()). If a session
+        // exists return the authenticated user. Otherwise, fall back to the
+        // Replit headers auto-dev-user behavior (for Replit dev environment).
+        $authUser = Auth::user();
+        if ($authUser) {
+            return response()->json($authUser);
+        }
+
+        $emailHeader = $request->header('X-Replit-User-Email');
+        $nameHeader = $request->header('X-Replit-User-Name');
+
+        if (!$emailHeader) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+
+        $email = $emailHeader;
+        $name = $nameHeader ?? 'Admin Benedita';
+
         $user = User::firstOrCreate(
             ['email' => $email],
             [
@@ -38,11 +54,19 @@ class AuthController extends Controller
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
+        // Log the user in via Laravel's auth system so a session cookie is set.
+        Auth::login($user);
+        $request->session()->regenerate();
+
         return response()->json(['user' => $user, 'message' => 'Login successful']);
     }
 
     public function logout(Request $request)
     {
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
         return response()->json(['message' => 'Logout successful']);
     }
 }

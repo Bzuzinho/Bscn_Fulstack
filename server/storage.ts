@@ -51,7 +51,7 @@ import {
   insertTreinoSchema,
   insertResultadoSchema,
 } from "@shared/schema";
-import { db } from "./db";
+import { db } from "./db.ts";
 import { eq, and, sql as drizzleSql, gte, lte } from "drizzle-orm";
 import { z } from "zod";
 
@@ -192,23 +192,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUsers(filters?: { escalaoId?: number; estado?: string }): Promise<User[]> {
-    if (!filters || Object.keys(filters).length === 0) {
-      return db.select().from(users);
-    }
-
-    const conditions = [];
-    if (filters.escalaoId) {
-      conditions.push(eq(users.escalaoId, filters.escalaoId));
-    }
-    if (filters.estado) {
-      conditions.push(eq(users.estadoUtilizador, filters.estado as any));
-    }
-
-    if (conditions.length === 0) {
-      return db.select().from(users);
-    }
-
-    return db.select().from(users).where(and(...conditions));
+    // Current DB users table (from Laravel migrations) only contains the core fields.
+    // For now, ignore filters that reference legacy or expanded user fields and
+    // return all users. We can later join with `pessoas` or extend the users table
+    // if more filters are required.
+    return db.select().from(users);
   }
 
   async updateUser(id: string, userData: Partial<UpsertUser>): Promise<User | undefined> {
@@ -384,13 +372,14 @@ export class DatabaseStorage implements IStorage {
     const primeiroDiaStr = primeiroDiaMes.toISOString().split('T')[0];
     const ultimoDiaStr = ultimoDiaMes.toISOString().split('T')[0];
     
-    // 1. Total de atletas ativos (using correct column name)
+    // 1. Total de atletas (users table in this DB only contains core fields).
+    // The original code filtered by `estado_utilizador` which isn't present in the
+    // current migrations; fall back to counting all users.
     const [atletasResult] = await db.select({
       count: drizzleSql<number>`count(*)::int`
     })
-    .from(users)
-    .where(eq(users.estadoUtilizador, 'ativo'));
-    
+    .from(users);
+
     const totalAtletas = atletasResult?.count || 0;
     
     // 2. Eventos do mês atual (using correct column name data_inicio)

@@ -7,6 +7,13 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
+     * Disable automatic transaction wrapping for this migration.
+     * Some PostgreSQL DDL statements (like adding constraints) can fail when run
+     * inside an already-failed transaction; disabling the automatic transaction
+     * here avoids the "current transaction is aborted" errors during migrate.
+     */
+    public $withinTransaction = false;
+    /**
      * Run the migrations.
      */
     public function up(): void

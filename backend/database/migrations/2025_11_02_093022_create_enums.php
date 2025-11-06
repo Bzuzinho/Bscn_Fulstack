@@ -8,6 +8,10 @@ use Illuminate\Support\Facades\DB;
 return new class extends Migration
 {
     /**
+     * Disable automatic transaction wrapping for this migration.
+     */
+    public $withinTransaction = false;
+    /**
      * Run the migrations.
      */
     public function up(): void

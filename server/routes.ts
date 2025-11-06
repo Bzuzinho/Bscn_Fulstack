@@ -1,9 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
-import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
-import { ObjectPermission } from "./objectAcl";
+import { storage } from "./storage.ts";
+import { pool } from "./db.ts";
+import { setupAuth, isAuthenticated } from "./replitAuth.ts";
+import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage.ts";
+import { ObjectPermission } from "./objectAcl.ts";
 import {
   insertEscalaoSchema,
   insertPessoaSchema,
@@ -25,8 +26,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      res.json(user);
+      try {
+        const user = await storage.getUser(userId);
+        if (user) return res.json(user);
+      } catch (err) {
+        console.error('storage.getUser failed, falling back to raw query', err);
+      }
+
+      // fallback: try a simple raw query selecting common columns
+      try {
+        const q = await pool.query('SELECT id, email, name FROM users WHERE id = $1 LIMIT 1', [userId]);
+        const row = q.rows[0];
+        if (row) return res.json(row);
+      } catch (err) {
+        console.error('raw user query failed', err);
+      }
+
+      // final fallback: return the minimal session info
+      return res.json({ id: userId });
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
@@ -124,7 +141,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/pessoas', isAuthenticated, async (req, res) => {
     try {
-      const validated = insertPessoaSchema.parse(req.body);
+      // Accept both legacy `pessoa` shape and the user-form shape used by the UI.
+      const body = req.body ?? {};
+
+      // Map UI/user fields to the `pessoas` table column names (telemovel, cp, data_nascimento)
+      const mapped = {
+        nome: body.name || body.nome,
+        email: body.email || null,
+        telemovel: body.contacto || body.telemovel || null,
+        data_nascimento: body.dataNascimento || body.data_nascimento || null,
+        nif: body.nif || null,
+        morada: body.morada || null,
+        cp: body.codigoPostal || body.cp || null,
+        localidade: body.localidade || null,
+        sexo: body.sexo || null,
+      } as any;
+
+      const validated = insertPessoaSchema.parse(mapped);
       const pessoa = await storage.createPessoa(validated);
       res.status(201).json(pessoa);
     } catch (error) {

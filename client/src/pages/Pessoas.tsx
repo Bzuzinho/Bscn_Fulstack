@@ -15,34 +15,45 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Users, Pencil, Trash2, Phone, Mail, MapPin, Calendar, User as UserIcon } from "lucide-react";
-import { useForm } from "react-hook-form";
+import { useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { upsertUserSchema, type User, type Escalao } from "@shared/schema";
+// Use local types for the frontend list/form to avoid importing runtime/shared types
+// (shared schema imports cause runtime/type mismatches in the browser dev overlay).
+type PessoaLocal = {
+  id: number;
+  nome: string;
+  email?: string | null;
+  telemovel?: string | null;
+  dataNascimento?: string | null;
+  nif?: string | null;
+  morada?: string | null;
+  cp?: string | null;
+  localidade?: string | null;
+  sexo?: string | null;
+};
+
+type EscalaoLocal = { id: number; nome: string };
 import { z } from "zod";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
 
-// Schema de validação para formulário de utilizador
-const userFormSchema = upsertUserSchema.pick({
-  name: true,
-  email: true,
-  contacto: true,
-  nif: true,
-  dataNascimento: true,
-  morada: true,
-  codigoPostal: true,
-  localidade: true,
-  numeroSocio: true,
-  escalaoId: true,
-  estadoUtilizador: true,
-  observacoesConfig: true,
-}).extend({
-  name: z.string().min(1, "Nome completo é obrigatório"),
+// Local validation schema for the UI (avoid importing runtime Zod schema from server/shared)
+// Local form schema aligned with the legacy `pessoas` table column names
+const userFormSchema = z.object({
+  nome: z.string().min(1, "Nome completo é obrigatório"),
   email: z.string().email("Email inválido").optional().or(z.literal("")),
-  contacto: z.string().min(9, "Contacto deve ter pelo menos 9 dígitos").optional().or(z.literal("")),
-  nif: z.string().length(9, "NIF deve ter 9 dígitos").optional().or(z.literal("")),
+  telemovel: z.string().optional().or(z.literal("")),
+  nif: z.string().optional().or(z.literal("")),
   dataNascimento: z.string().optional().or(z.literal("")),
+  morada: z.string().optional().or(z.literal("")),
+  cp: z.string().optional().or(z.literal("")),
+  localidade: z.string().optional().or(z.literal("")),
+  sexo: z.string().optional().or(z.literal("")),
+  // UI-only fields (will not be sent to insert Pessoa table directly)
+  numeroSocio: z.string().optional().or(z.literal("")),
   escalaoId: z.number().nullable().optional(),
+  estadoUtilizador: z.string().optional().or(z.literal("ativo")),
+  observacoesConfig: z.string().optional().or(z.literal("")),
 });
 
 type UserFormData = z.infer<typeof userFormSchema>;
@@ -52,17 +63,21 @@ export default function Pessoas() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
+  // Properly type the resolver so react-hook-form generics line up with Zod schema
+  const resolver = zodResolver(userFormSchema) as unknown as Resolver<UserFormData>;
+
   const form = useForm<UserFormData>({
-    resolver: zodResolver(userFormSchema),
+    resolver,
     defaultValues: {
-      name: "",
+      nome: "",
       email: "",
-      contacto: "",
+      telemovel: "",
       nif: "",
       dataNascimento: "",
       morada: "",
-      codigoPostal: "",
+      cp: "",
       localidade: "",
+      sexo: "",
       numeroSocio: "",
       escalaoId: null,
       estadoUtilizador: "ativo",
@@ -70,17 +85,33 @@ export default function Pessoas() {
     },
   });
 
-  const { data: users = [], isLoading: isUsersLoading } = useQuery<User[]>({
+  const { data: users = [], isLoading: isUsersLoading } = useQuery<PessoaLocal[]>({
     queryKey: ["/api/pessoas"],
   });
 
-  const { data: escaloes = [] } = useQuery<Escalao[]>({
+  const { data: escaloes = [] } = useQuery<EscalaoLocal[]>({
     queryKey: ["/api/escaloes"],
   });
 
   const saveUserMutation = useMutation({
     mutationFn: async (data: UserFormData) => {
-      await apiRequest("POST", "/api/pessoas", data);
+      // Build payload that the server expects. The Pessoas endpoint accepts
+      // both legacy `pessoas` fields and some UI names; here we send the DB
+      // aligned properties. Note: server will map data_nascimento -> dataNascimento
+      const payload = {
+        nome: data.nome,
+        email: data.email || null,
+        telemovel: data.telemovel || null,
+        data_nascimento: data.dataNascimento || null,
+        nif: data.nif || null,
+        morada: data.morada || null,
+        cp: data.cp || null,
+        localidade: data.localidade || null,
+        sexo: data.sexo || null,
+        tipo: 'atleta',
+      } as any;
+
+      await apiRequest("POST", "/api/pessoas", payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/pessoas"] });
@@ -224,27 +255,27 @@ export default function Pessoas() {
               <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 pb-3">
                 <div className="flex items-center gap-3 flex-1">
                   <Avatar className="h-12 w-12">
-                    <AvatarImage src={user.profileImageUrl ?? undefined} alt={user.name || ""} />
+                    <AvatarImage src={(user as any).profileImageUrl ?? undefined} alt={user.nome || ""} />
                     <AvatarFallback>
-                      {user.name ? user.name.charAt(0).toUpperCase() : <UserIcon className="h-6 w-6" />}
+                      {user.nome ? user.nome.charAt(0).toUpperCase() : <UserIcon className="h-6 w-6" />}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1">
                     <h3 className="font-semibold text-base" data-testid={`user-${user.id}-name`}>
-                      {user.name || "Sem nome"}
+                      {user.nome || "Sem nome"}
                     </h3>
-                    {user.numeroSocio && (
+                    {((user as any).numeroSocio ?? (user as any).numero_socio) && (
                       <p className="text-sm text-muted-foreground mt-1">
-                        Sócio nº {user.numeroSocio}
+                        Sócio nº {(user as any).numeroSocio ?? (user as any).numero_socio}
                       </p>
                     )}
                   </div>
                 </div>
                 <Badge 
-                  className={estadoColors[user.estadoUtilizador || "ativo"]}
+                  className={estadoColors[(user as any).estadoUtilizador || "ativo"]}
                   data-testid={`user-${user.id}-status`}
                 >
-                  {estadoLabels[user.estadoUtilizador || "ativo"]}
+                  {estadoLabels[(user as any).estadoUtilizador || "ativo"]}
                 </Badge>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -254,10 +285,10 @@ export default function Pessoas() {
                     <span className="truncate" data-testid={`user-${user.id}-email`}>{user.email}</span>
                   </div>
                 )}
-                {user.contacto && (
+                {(user as any).telemovel && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Phone className="h-4 w-4" />
-                    <span data-testid={`user-${user.id}-phone`}>{user.contacto}</span>
+                    <span data-testid={`user-${user.id}-phone`}>{(user as any).telemovel}</span>
                   </div>
                 )}
                 {user.localidade && (
@@ -310,7 +341,7 @@ export default function Pessoas() {
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="name"
+                  name="nome"
                   render={({ field }) => (
                     <FormItem className="col-span-2">
                       <FormLabel>Nome Completo *</FormLabel>
@@ -318,7 +349,7 @@ export default function Pessoas() {
                         <Input 
                           placeholder="João Silva" 
                           {...field}
-                          data-testid="input-name"
+                          data-testid="input-nome"
                         />
                       </FormControl>
                       <FormMessage />
@@ -347,7 +378,7 @@ export default function Pessoas() {
 
                 <FormField
                   control={form.control}
-                  name="contacto"
+                  name="telemovel"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Contacto</FormLabel>
@@ -355,7 +386,7 @@ export default function Pessoas() {
                         <Input 
                           placeholder="912345678" 
                           {...field}
-                          data-testid="input-contacto"
+                          data-testid="input-telemovel"
                         />
                       </FormControl>
                       <FormMessage />
@@ -492,7 +523,7 @@ export default function Pessoas() {
 
                 <FormField
                   control={form.control}
-                  name="codigoPostal"
+                  name="cp"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Código Postal</FormLabel>
@@ -501,7 +532,7 @@ export default function Pessoas() {
                           placeholder="1000-001" 
                           {...field}
                           value={field.value || ""}
-                          data-testid="input-codigo-postal"
+                          data-testid="input-cp"
                         />
                       </FormControl>
                       <FormMessage />

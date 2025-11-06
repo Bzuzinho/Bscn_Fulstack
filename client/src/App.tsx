@@ -9,6 +9,8 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useState } from "react";
 import Landing from "@/pages/Landing";
+import Login from "@/pages/Login";
+import { useLocation } from "wouter";
 import Dashboard from "@/pages/Dashboard";
 import Pessoas from "@/pages/Pessoas";
 import PessoaDetalhes from "@/pages/PessoaDetalhes";
@@ -27,7 +29,22 @@ function AppContent() {
     "--sidebar-width-icon": "4rem",
   };
 
+  const [location] = useLocation();
+
+  // If the app is still loading auth or the user is not authenticated,
+  // show the landing page. Allow a dedicated client-side login page at
+  // `/login` to be shown even when unauthenticated so the user can submit
+  // credentials.
   if (isLoading || !isAuthenticated) {
+    if (location === "/login") {
+      return (
+        <>
+          <Login />
+          <Toaster />
+        </>
+      );
+    }
+
     return (
       <>
         <Landing />

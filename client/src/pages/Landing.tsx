@@ -5,7 +5,8 @@ import logoPath from "@assets/BSCN_Logo_1759963867913.png";
 
 export default function Landing() {
   const handleLogin = () => {
-    window.location.href = "/api/login";
+    // navigate to a client-side login page where the user can enter credentials
+    window.location.href = "/login";
   };
 
   return (

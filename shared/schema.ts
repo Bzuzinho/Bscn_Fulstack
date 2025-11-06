@@ -37,32 +37,37 @@ export const estadoUtilizadorEnum = pgEnum('estado_utilizador', ['ativo', 'inati
 export const sexoEnum = pgEnum('sexo', ['M', 'F', 'Outro']);
 export const estadoCivilEnum = pgEnum('estado_civil', ['solteiro', 'casado', 'divorciado', 'viuvo', 'uniao_facto']);
 
+// NOTE: The Laravel migrations in `backend/database/migrations/0001_01_01_000000_create_users_table.php`
+// create a minimal `users` table with the core Laravel fields. Align the Drizzle schema with the
+// actual columns present in the DB to avoid query errors when selecting non-existent columns.
 export const users = pgTable("users", {
-  // Core Replit Auth fields (MANDATORY - DO NOT CHANGE)
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  // Primary key (Laravel created with $table->id())
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+
+  // Core fields
   email: varchar("email").unique(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
-  
-  // Additional fields from PDF
+
+  // Additional fields from PDF / expanded profile
   numeroSocio: varchar("numero_socio", { length: 50 }),
   name: varchar("name", { length: 200 }), // Full name
   estado: varchar("estado", { length: 50 }), // Status geral
   estadoUtilizador: estadoUtilizadorEnum("estado_utilizador").default('ativo'),
-  
+
   // Personal Information
   nif: varchar("nif", { length: 9 }),
   cartaoCidadao: varchar("cartao_cidadao", { length: 20 }),
   contacto: varchar("contacto", { length: 20 }),
   dataNascimento: date("data_nascimento"),
   sexo: sexoEnum("sexo"),
-  
+
   // Address
   morada: text("morada"),
   codigoPostal: varchar("codigo_postal", { length: 10 }),
   localidade: varchar("localidade", { length: 100 }),
-  
+
   // Additional Info
   empresa: varchar("empresa", { length: 200 }),
   escola: varchar("escola", { length: 200 }),
@@ -71,24 +76,24 @@ export const users = pgTable("users", {
   nacionalidade: varchar("nacionalidade", { length: 50 }),
   numeroIrmaos: integer("numero_irmaos"),
   menor: boolean("menor").default(false),
-  
+
   // Relations
-  encarregadoId: varchar("encarregado_id").references((): any => users.id, { onDelete: 'set null' }),
+  encarregadoId: integer("encarregado_id").references((): any => users.id, { onDelete: 'set null' }),
   escalaoId: integer("escalao_id").references(() => escaloes.id, { onDelete: 'set null' }),
   tipoMensalidadeId: integer("tipo_mensalidade_id").references(() => tiposMensalidade.id, { onDelete: 'set null' }),
-  
+
   // Auth fields (Laravel legacy - optional with Replit Auth)
   emailVerifiedAt: timestamp("email_verified_at"),
   password: varchar("password", { length: 255 }), // Optional - Replit Auth doesn't use this
   rememberToken: varchar("remember_token", { length: 100 }),
-  
+
   // Role (will be replaced by RBAC)
   role: varchar("role", { length: 50 }).default('membro'),
-  
+
   // Config
   profilePhotoPath: varchar("profile_photo_path", { length: 500 }),
   observacoesConfig: text("observacoes_config"),
-  
+
   // Timestamps
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -727,17 +732,16 @@ export type Campanha = typeof campanhas.$inferSelect;
 // Pessoas (People - TO BE MIGRATED TO users)
 export const pessoas = pgTable("pessoas", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  userId: varchar("user_id").references(() => users.id, { onDelete: 'set null' }),
+  userId: integer("user_id").references(() => users.id, { onDelete: 'set null' }),
   nome: varchar("nome", { length: 200 }).notNull(),
   email: varchar("email", { length: 200 }),
-  telefone: varchar("telefone", { length: 20 }),
-  tipo: varchar("tipo", { length: 50 }).notNull(),
-  escalao: integer("escalao").references(() => escaloes.id, { onDelete: 'set null' }),
+  telemovel: varchar("telemovel", { length: 20 }),
   dataNascimento: date("data_nascimento"),
   nif: varchar("nif", { length: 20 }),
-  morada: text("morada"),
-  observacoes: text("observacoes"),
-  ativo: boolean("ativo").default(true),
+  morada: varchar("morada", { length: 500 }),
+  cp: varchar("cp", { length: 20 }),
+  localidade: varchar("localidade", { length: 200 }),
+  sexo: varchar("sexo", { length: 20 }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

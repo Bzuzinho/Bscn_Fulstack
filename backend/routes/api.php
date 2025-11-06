@@ -14,17 +14,20 @@ use Illuminate\Support\Facades\Route;
 // Health check
 Route::get('/ping', fn () => response()->json(['status' => 'ok', 'time' => now()]));
 
-// Auth routes (com e sem prefixo para compatibilidade)
-Route::prefix('auth')->group(function () {
-    Route::get('/user', [AuthController::class, 'user']);
+// Auth routes (use session) - run these under the web middleware so sessions are available
+Route::middleware('web')->group(function () {
+    // Auth routes (com e sem prefixo para compatibilidade)
+    Route::prefix('auth')->group(function () {
+        Route::get('/user', [AuthController::class, 'user']);
+        Route::post('/login', [AuthController::class, 'login']);
+        Route::post('/logout', [AuthController::class, 'logout']);
+    });
+
+    // Rotas de autenticação sem prefixo (compatibilidade com frontend)
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/logout', [AuthController::class, 'logout']);
-});
-
-// Rotas de autenticação sem prefixo (compatibilidade com frontend)
-Route::post('/login', [AuthController::class, 'login']);
-Route::post('/logout', [AuthController::class, 'logout']);
-Route::get('/user', [AuthController::class, 'user']);
+    Route::get('/user', [AuthController::class, 'user']);
+})->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class]);
 
 // Escaloes routes
 Route::apiResource('escaloes', EscalaoController::class);
