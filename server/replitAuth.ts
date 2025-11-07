@@ -10,16 +10,24 @@ import { storage } from "./storage.ts";
 import { pool } from "./db.ts";
 import bcrypt from "bcryptjs";
 
-if (!process.env.REPLIT_DOMAINS) {
+// REPLIT_DOMAINS is required in production for the OIDC strategies.
+// In development we allow it to be missing and fall back to the dev auth flow.
+if (!process.env.REPLIT_DOMAINS && process.env.NODE_ENV === 'production') {
   throw new Error("Environment variable REPLIT_DOMAINS not provided");
 }
 
 const getOidcConfig = memoize(
   async () => {
-    return await client.discovery(
-      new URL(process.env.ISSUER_URL ?? "https://replit.com/oidc"),
-      process.env.REPL_ID!
-    );
+    const issuerRaw = process.env.ISSUER_URL ?? "https://replit.com/oidc";
+    let issuerUrl: URL;
+    try {
+      issuerUrl = new URL(issuerRaw);
+    } catch (e: any) {
+      console.error(`Invalid ISSUER_URL provided: ${issuerRaw}`, e?.message ?? e);
+      throw new Error(`Invalid ISSUER_URL environment variable: ${issuerRaw}`);
+    }
+
+    return await client.discovery(issuerUrl, process.env.REPL_ID!);
   },
   { maxAge: 3600 * 1000 }
 );
@@ -30,7 +38,9 @@ export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
-    conString: process.env.DATABASE_URL,
+    // prefer passing an existing pool instance to avoid connection-string parsing
+    // differences between environments (and avoid libpq/URI quirks)
+    pool: pool,
     // allow creating the sessions table automatically in development
     createTableIfMissing: process.env.NODE_ENV !== 'production',
     ttl: sessionTtl,
@@ -177,7 +187,7 @@ export async function setupAuth(app: Express) {
       }
 
       // find user in DB
-      const q = await pool.query('SELECT id, email, name, password FROM users WHERE email = $1 LIMIT 1', [email]);
+      const q = await pool.query('SELECT id, email, name, password, role FROM users WHERE email = $1 LIMIT 1', [email]);
       const row = q.rows[0];
       if (!row) {
         return res.status(401).json({ message: 'Invalid credentials' });
@@ -191,8 +201,10 @@ export async function setupAuth(app: Express) {
 
       // Build a session user object compatible with isAuthenticated
       const now = Math.floor(Date.now() / 1000);
+      // Include role and basic profile info in the session claims so
+      // server- and client-side permission checks can rely on the session.
       const sessionUser: any = {
-        claims: { sub: row.id },
+        claims: { sub: row.id, email: row.email, name: row.name, role: row.role || 'membro' },
         access_token: null,
         refresh_token: null,
         expires_at: now + 60 * 60 * 24, // 1 day

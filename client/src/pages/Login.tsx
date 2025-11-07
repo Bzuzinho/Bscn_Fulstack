@@ -21,14 +21,19 @@ export default function Login() {
       });
 
       if (!res.ok) {
-        // Prefer JSON error messages, fall back to text
+        // Read the response body once. res.json() consumes the stream, so
+        // parsing should be attempted from the single text read to avoid
+        // "body stream already read" errors.
         let errMsg = res.statusText;
-        try {
-          const json = await res.json();
-          if (json && json.message) errMsg = json.message;
-        } catch (_) {
-          const txt = await res.text();
-          if (txt) errMsg = txt;
+        const txt = await res.text();
+        if (txt) {
+          try {
+            const json = JSON.parse(txt);
+            if (json && json.message) errMsg = json.message;
+            else errMsg = txt;
+          } catch (_e) {
+            errMsg = txt;
+          }
         }
         throw new Error(errMsg || `${res.status}`);
       }

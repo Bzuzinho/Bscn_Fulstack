@@ -10,8 +10,8 @@ async function main() {
 
   try {
     const q = await pool.query(
-      `INSERT INTO users (email, name, password, created_at, updated_at) VALUES ($1, $2, $3, now(), now()) ON CONFLICT (email) DO UPDATE SET password = EXCLUDED.password, name = EXCLUDED.name RETURNING id, email, name`,
-      [email, name, hashed]
+      `INSERT INTO users (email, name, password, role, created_at, updated_at) VALUES ($1, $2, $3, $4, now(), now()) ON CONFLICT (email) DO UPDATE SET password = EXCLUDED.password, name = EXCLUDED.name, role = EXCLUDED.role RETURNING id, email, name, role`,
+      [email, name, hashed, 'admin']
     );
 
     console.log('Upserted user:', q.rows[0]);

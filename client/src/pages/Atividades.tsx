@@ -58,11 +58,13 @@ export default function Atividades() {
     },
   });
 
-  // Fetch pessoas for attendance
-  const { data: pessoas = [] } = useQuery<Pessoa[]>({
+  // Fetch pessoas for attendance (map server shapes to client shapes)
+  const { data: pessoasRaw = [] } = useQuery<any[]>({
     queryKey: ["/api/pessoas"],
     enabled: !!attendanceAtividade,
   });
+  const { mapPessoaServerToClient } = require("@/lib/mappers");
+  const pessoas = Array.isArray(pessoasRaw) ? pessoasRaw.map((p) => mapPessoaServerToClient(p)) : [];
 
   // Fetch presencas for selected activity
   const { data: presencas = [] } = useQuery<Presenca[]>({

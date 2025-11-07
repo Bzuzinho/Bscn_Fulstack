@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useParams, useLocation, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -17,13 +17,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Save, User as UserIcon, Activity, Euro, Settings, Upload } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useAuth } from "@/hooks/useAuth";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import type { UploadResult } from "@uppy/core";
-import { 
-  upsertUserSchema,
-  insertDadosDesportivosSchema,
-  insertDadosConfiguracaoSchema,
-} from "@shared/schema";
 import type { 
   User, 
   Escalao, 
@@ -35,6 +31,8 @@ import type {
 } from "@shared/schema";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+
+import { mapPessoaServerToClient, mapPessoaClientToServer } from "@/lib/mappers";
 
 const estadoLabels = {
   ativo: "Ativo",
@@ -48,11 +46,93 @@ const estadoColors = {
   suspenso: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
 };
 
-export default function PessoaDetalhes() {
+// Local (client-safe) Zod schemas to avoid importing runtime schemas from @shared
+const upsertUserSchemaLocal = z.object({
+  name: z.string().optional(),
+  numeroSocio: z.string().optional(),
+  nif: z.string().optional(),
+  cartaoCidadao: z.string().optional(),
+  email: z.string().email().optional(),
+  contacto: z.string().optional(),
+  dataNascimento: z.string().optional(),
+  sexo: z.string().optional(),
+  morada: z.string().optional(),
+  codigoPostal: z.string().optional(),
+  localidade: z.string().optional(),
+  empresa: z.string().optional(),
+  escola: z.string().optional(),
+  estadoCivil: z.string().optional(),
+  ocupacao: z.string().optional(),
+  nacionalidade: z.string().optional(),
+  numeroIrmaos: z.number().optional(),
+  menor: z.boolean().optional(),
+  encarregadoId: z.union([z.number().optional(), z.string().optional()]).optional(),
+  escalaoId: z.union([z.number().optional(), z.string().optional()]).optional(),
+  estadoUtilizador: z.string().optional(),
+});
+
+const insertDadosDesportivosSchemaLocal = z.object({
+  numeroFederacao: z.string().optional(),
+  pmb: z.string().optional(),
+  dataInscricao: z.string().optional(),
+  altura: z.string().optional(),
+  peso: z.string().optional(),
+  atestadoMedico: z.boolean().optional(),
+  dataAtestado: z.string().optional(),
+  informacoesMedicas: z.string().optional(),
+  patologias: z.string().optional(),
+  medicamentos: z.string().optional(),
+  observacoes: z.string().optional(),
+  cartaoFederacao: z.string().optional(),
+  arquivoInscricao: z.string().optional(),
+});
+
+const insertDadosConfiguracaoSchemaLocal = z.object({
+  consentimento: z.boolean().optional(),
+  dataConsentimento: z.string().optional(),
+  ficheiroConsentimento: z.string().optional(),
+  declaracaoTransporte: z.boolean().optional(),
+  dataTransporte: z.string().optional(),
+  ficheiroTransporte: z.string().optional(),
+  afiliacao: z.boolean().optional(),
+  dataAfiliacao: z.string().optional(),
+  ficheiroAfiliacao: z.string().optional(),
+});
+
+class ErrorBoundary extends React.Component<any, { error: any | null }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { error };
+  }
+
+  componentDidCatch(error: any, info: any) {
+    // Log to console; in future we could POST to server-side logging endpoint
+    console.error("ErrorBoundary caught error:", error, info);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="p-8">
+          <h2 className="text-xl font-bold mb-4">Ocorreu um erro ao abrir a página</h2>
+          <pre className="whitespace-pre-wrap bg-red-50 p-4 rounded text-sm text-red-800">{String(this.state.error && (this.state.error.stack || this.state.error.message || this.state.error))}</pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function PessoaDetalhesInner() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("pessoais");
+  const [selectedEducando, setSelectedEducando] = useState<number | null>(null);
 
   // Fetch user data
   const { data: user, isLoading: isUserLoading } = useQuery<User>({
@@ -60,12 +140,26 @@ export default function PessoaDetalhes() {
     queryFn: async () => {
       const response = await fetch(`/api/pessoas/${id}`);
       if (!response.ok) throw new Error("Failed to fetch user");
-      return response.json();
+      const j = await response.json();
+      return mapPessoaServerToClient(j);
     },
   });
 
+
   const { data: escaloes = [] } = useQuery<Escalao[]>({
     queryKey: ["/api/escaloes"],
+  });
+
+  const { user: currentUser } = useAuth() as any;
+
+  const { data: allPessoas = [] } = useQuery<User[]>({
+    queryKey: ["/api/pessoas", "all"],
+    queryFn: async () => {
+      const resp = await fetch(`/api/pessoas`);
+      if (!resp.ok) throw new Error("Failed to fetch pessoas");
+      const arr = await resp.json();
+      return Array.isArray(arr) ? arr.map(mapPessoaServerToClient) : arr;
+    },
   });
 
   const { data: dadosDesportivos } = useQuery<DadosDesportivos>({
@@ -133,6 +227,8 @@ export default function PessoaDetalhes() {
     );
   }
 
+  const showDesportivos = (user?.role && user.role.toString().toLowerCase().includes("atleta")) || !!dadosDesportivos || !!user.escalaoId;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -160,17 +256,50 @@ export default function PessoaDetalhes() {
         </div>
       </div>
 
+      {/* Encarregado quick-launch: escolher educando */}
+      {currentUser && currentUser.role && currentUser.role.toString().toLowerCase().includes("encarregado") && (
+        <div className="flex items-center gap-4">
+          <Select
+            onValueChange={(v) => setSelectedEducando(v ? parseInt(v) : null)}
+            value={selectedEducando ? String(selectedEducando) : ""}
+          >
+            <FormControl>
+              <SelectTrigger>
+                <SelectValue placeholder="Escolher educando" />
+              </SelectTrigger>
+            </FormControl>
+            <SelectContent>
+              {allPessoas.filter((p: any) => p.menor).map((p: any) => (
+                <SelectItem key={p.id} value={String(p.id)}>
+                  {p.name || p.nome}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button onClick={() => selectedEducando && navigate(`/pessoas/${selectedEducando}`)} disabled={!selectedEducando}>
+            Abrir Ficha do Educando
+          </Button>
+        </div>
+      )}
+
       {/* Tabs */}
+      {/** Hide Desportivos tab when user is not an atleta and has no desportivos data */}
+      {
+        /* compute simple show flag */
+      }
+      
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="pessoais" data-testid="tab-dados-pessoais">
             <UserIcon className="h-4 w-4 mr-2" />
             Dados Pessoais
           </TabsTrigger>
-          <TabsTrigger value="desportivos" data-testid="tab-dados-desportivos">
-            <Activity className="h-4 w-4 mr-2" />
-            Dados Desportivos
-          </TabsTrigger>
+          {showDesportivos && (
+            <TabsTrigger value="desportivos" data-testid="tab-dados-desportivos">
+              <Activity className="h-4 w-4 mr-2" />
+              Dados Desportivos
+            </TabsTrigger>
+          )}
           <TabsTrigger value="financeiros" data-testid="tab-dados-financeiros">
             <Euro className="h-4 w-4 mr-2" />
             Dados Financeiros
@@ -182,17 +311,19 @@ export default function PessoaDetalhes() {
         </TabsList>
 
         <TabsContent value="pessoais">
-          <DadosPessoaisTab user={user} escaloes={escaloes} />
+          <DadosPessoaisTab user={user} escaloes={escaloes} currentUser={currentUser} />
         </TabsContent>
 
-        <TabsContent value="desportivos">
-          <DadosDesportivosTab 
-            userId={id!} 
-            dadosDesportivos={dadosDesportivos}
-            treinos={treinos}
-            resultados={resultados}
-          />
-        </TabsContent>
+        {showDesportivos && (
+          <TabsContent value="desportivos">
+            <DadosDesportivosTab 
+              userId={id!} 
+              dadosDesportivos={dadosDesportivos}
+              treinos={treinos}
+              resultados={resultados}
+            />
+          </TabsContent>
+        )}
 
         <TabsContent value="financeiros">
           <DadosFinanceirosTab userId={id!} faturas={faturas} />
@@ -208,14 +339,22 @@ export default function PessoaDetalhes() {
       </Tabs>
     </div>
   );
+  }
+
+export default function PessoaDetalhes() {
+  return (
+    <ErrorBoundary>
+      <PessoaDetalhesInner />
+    </ErrorBoundary>
+  );
 }
 
 // Tab Components will be defined below
-function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] }) {
+function DadosPessoaisTab({ user, escaloes, currentUser }: { user: User; escaloes: Escalao[]; currentUser?: any }) {
   const { toast } = useToast();
   
   const form = useForm({
-    resolver: zodResolver(upsertUserSchema.partial()),
+    resolver: zodResolver(upsertUserSchemaLocal.partial()),
     defaultValues: {
       name: user.name || "",
       numeroSocio: user.numeroSocio || "",
@@ -240,9 +379,19 @@ function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] 
     },
   });
 
+  // Permissions (computed with currentUser passed as prop)
+  const isAdmin = (currentUser?.role ?? "").toString().toLowerCase() === "admin";
+  const isSelf = String(currentUser?.id ?? "") === String(user.id ?? "");
+  const isGuardianOfUser = !!currentUser?.id && String(user.encarregadoId ?? "") === String(currentUser.id ?? "");
+  const isEncarregado = (currentUser?.role ?? "").toString().toLowerCase().includes("encarregado");
+  const canEdit = isAdmin || isSelf || isGuardianOfUser;
+  const menorValue = form.watch("menor");
+
   const updateUserMutation = useMutation({
     mutationFn: async (data: any) => {
-      await apiRequest("PUT", `/api/pessoas/${user.id}`, data);
+      // use central mapper to produce server-aligned payload
+      const mapped = mapPessoaClientToServer(data);
+      await apiRequest("PUT", `/api/pessoas/${user.id}`, mapped);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/pessoas", user.id] });
@@ -341,7 +490,7 @@ function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] 
                   <FormItem>
                     <FormLabel>Nome Completo *</FormLabel>
                     <FormControl>
-                      <Input {...field} data-testid="input-name" />
+                      <Input {...field} data-testid="input-name" disabled={!canEdit} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -355,7 +504,7 @@ function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] 
                   <FormItem>
                     <FormLabel>Nº Sócio</FormLabel>
                     <FormControl>
-                      <Input {...field} data-testid="input-numero-socio" />
+                      <Input {...field} data-testid="input-numero-socio" disabled={!canEdit} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -369,7 +518,7 @@ function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] 
                   <FormItem>
                     <FormLabel>NIF</FormLabel>
                     <FormControl>
-                      <Input {...field} maxLength={9} data-testid="input-nif" />
+                      <Input {...field} maxLength={9} data-testid="input-nif" disabled={!canEdit} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -383,7 +532,7 @@ function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] 
                   <FormItem>
                     <FormLabel>Cartão Cidadão</FormLabel>
                     <FormControl>
-                      <Input {...field} data-testid="input-cartao-cidadao" />
+                      <Input {...field} data-testid="input-cartao-cidadao" disabled={!canEdit} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -397,7 +546,7 @@ function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] 
                   <FormItem>
                     <FormLabel>Data de Nascimento</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} data-testid="input-data-nascimento" />
+                      <Input type="date" {...field} data-testid="input-data-nascimento" disabled={!canEdit} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -435,7 +584,7 @@ function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] 
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" {...field} data-testid="input-email" />
+                      <Input type="email" {...field} data-testid="input-email" disabled={!canEdit} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -449,7 +598,7 @@ function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] 
                   <FormItem>
                     <FormLabel>Contacto</FormLabel>
                     <FormControl>
-                      <Input {...field} data-testid="input-contacto" />
+                      <Input {...field} data-testid="input-contacto" disabled={!canEdit} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -463,7 +612,7 @@ function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] 
                   <FormItem className="col-span-3">
                     <FormLabel>Morada</FormLabel>
                     <FormControl>
-                      <Input {...field} data-testid="input-morada" />
+                      <Input {...field} data-testid="input-morada" disabled={!canEdit} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -477,7 +626,7 @@ function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] 
                   <FormItem>
                     <FormLabel>Código Postal</FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder="0000-000" data-testid="input-codigo-postal" />
+                      <Input {...field} placeholder="0000-000" data-testid="input-codigo-postal" disabled={!canEdit} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -491,12 +640,68 @@ function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] 
                   <FormItem>
                     <FormLabel>Localidade</FormLabel>
                     <FormControl>
-                      <Input {...field} data-testid="input-localidade" />
+                      <Input {...field} data-testid="input-localidade" disabled={!canEdit} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
+              {/* Menor checkbox and Encarregado selector */}
+              <FormField
+                control={form.control}
+                name="menor"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Menor</FormLabel>
+                    <FormControl>
+                      <input
+                        type="checkbox"
+                        checked={!!field.value}
+                        onChange={(e) => field.onChange(e.target.checked)}
+                        disabled={!canEdit}
+                        data-testid="input-menor"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {menorValue && (
+                <FormField
+                  control={form.control}
+                  name="encarregadoId"
+                  render={({ field }) => (
+                    <FormItem className="col-span-3">
+                      <FormLabel>Encarregado</FormLabel>
+                      <FormControl>
+                        <Select
+                          onValueChange={(v) => field.onChange(Number(v))}
+                          value={field.value?.toString() || ""}
+                          disabled={!canEdit}
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-encarregado">
+                              <SelectValue placeholder="Selecionar encarregado" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {allPessoas
+                              .filter((p: any) => p.id !== user.id)
+                              .map((p: any) => (
+                                <SelectItem key={p.id} value={String(p.id)}>
+                                  {p.name || p.nome}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <FormField
                 control={form.control}
@@ -531,7 +736,7 @@ function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] 
                   <FormItem>
                     <FormLabel>Empresa</FormLabel>
                     <FormControl>
-                      <Input {...field} data-testid="input-empresa" />
+                      <Input {...field} data-testid="input-empresa" disabled={!canEdit} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -545,7 +750,7 @@ function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] 
                   <FormItem>
                     <FormLabel>Escola</FormLabel>
                     <FormControl>
-                      <Input {...field} data-testid="input-escola" />
+                      <Input {...field} data-testid="input-escola" disabled={!canEdit} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -559,7 +764,7 @@ function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] 
                   <FormItem>
                     <FormLabel>Ocupação</FormLabel>
                     <FormControl>
-                      <Input {...field} data-testid="input-ocupacao" />
+                      <Input {...field} data-testid="input-ocupacao" disabled={!canEdit} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -573,7 +778,7 @@ function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] 
                   <FormItem>
                     <FormLabel>Nacionalidade</FormLabel>
                     <FormControl>
-                      <Input {...field} data-testid="input-nacionalidade" />
+                      <Input {...field} data-testid="input-nacionalidade" disabled={!canEdit} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -587,7 +792,7 @@ function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] 
                   <FormItem>
                     <FormLabel>Nº Irmãos</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} data-testid="input-numero-irmaos" />
+                      <Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value) || 0)} data-testid="input-numero-irmaos" disabled={!canEdit} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -603,6 +808,7 @@ function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] 
                     <Select 
                       onValueChange={(value) => field.onChange(value === "none" ? null : parseInt(value))} 
                       value={field.value?.toString() || "none"}
+                      disabled={!canEdit}
                     >
                       <FormControl>
                         <SelectTrigger data-testid="select-escalao">
@@ -629,7 +835,7 @@ function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] 
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Estado</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || "ativo"}>
+                    <Select onValueChange={field.onChange} value={field.value || "ativo"} disabled={!canEdit}>
                       <FormControl>
                         <SelectTrigger data-testid="select-estado">
                           <SelectValue />
@@ -648,7 +854,7 @@ function DadosPessoaisTab({ user, escaloes }: { user: User; escaloes: Escalao[] 
             </div>
 
             <div className="flex justify-end">
-              <Button type="submit" disabled={updateUserMutation.isPending} data-testid="button-save-pessoais">
+              <Button type="submit" disabled={!canEdit || updateUserMutation.isPending} data-testid="button-save-pessoais">
                 <Save className="h-4 w-4 mr-2" />
                 {updateUserMutation.isPending ? "A guardar..." : "Guardar Alterações"}
               </Button>
@@ -674,7 +880,7 @@ function DadosDesportivosTab({
   const { toast } = useToast();
   
   const form = useForm({
-    resolver: zodResolver(insertDadosDesportivosSchema.partial()),
+    resolver: zodResolver(insertDadosDesportivosSchemaLocal.partial()),
     defaultValues: {
       numeroFederacao: dadosDesportivos?.numeroFederacao || "",
       pmb: dadosDesportivos?.pmb || "",
@@ -687,6 +893,8 @@ function DadosDesportivosTab({
       observacoes: dadosDesportivos?.observacoes || "",
       patologias: dadosDesportivos?.patologias || "",
       medicamentos: dadosDesportivos?.medicamentos || "",
+      cartaoFederacao: dadosDesportivos?.cartaoFederacao || "",
+      arquivoInscricao: dadosDesportivos?.arquivoInscricao || "",
     },
   });
 
@@ -854,6 +1062,63 @@ function DadosDesportivosTab({
                       <FormLabel>Observações</FormLabel>
                       <FormControl>
                         <Textarea {...field} data-testid="textarea-observacoes" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Cartao Federacao (texto) */}
+                <FormField
+                  control={form.control}
+                  name="cartaoFederacao"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Cartão Federação</FormLabel>
+                      <FormControl>
+                        <Input {...field} data-testid="input-cartao-federacao" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Arquivo de Inscrição (upload) */}
+                <FormField
+                  control={form.control}
+                  name="arquivoInscricao"
+                  render={({ field }) => (
+                    <FormItem className="col-span-3">
+                      <FormLabel>Arquivo Inscrição</FormLabel>
+                      <FormControl>
+                        <div className="flex items-center gap-3">
+                          <Input {...field} readOnly data-testid="input-arquivo-inscricao" />
+                          <ObjectUploader
+                            maxNumberOfFiles={1}
+                            maxFileSize={5242880}
+                            onGetUploadParameters={async () => {
+                              const response = await fetch("/api/objects/upload", {
+                                method: "POST",
+                                credentials: "include",
+                              });
+                              if (!response.ok) throw new Error("Failed to get upload URL");
+                              const { uploadURL } = await response.json();
+                              return { method: "PUT" as const, url: uploadURL };
+                            }}
+                            onComplete={(result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+                              if (result.successful && result.successful.length > 0) {
+                                const uploadedUrl = result.successful[0].uploadURL;
+                                if (uploadedUrl) {
+                                  form.setValue("arquivoInscricao", uploadedUrl);
+                                  toast({ title: "Upload concluído", description: "Arquivo de inscrição carregado." });
+                                }
+                              }
+                            }}
+                          >
+                            <Upload className="h-4 w-4 mr-2" />
+                            Carregar
+                          </ObjectUploader>
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -1057,7 +1322,7 @@ function ConfiguracaoTab({
   const { toast } = useToast();
   
   const form = useForm({
-    resolver: zodResolver(insertDadosConfiguracaoSchema.partial()),
+    resolver: zodResolver(insertDadosConfiguracaoSchemaLocal.partial()),
     defaultValues: {
       consentimento: dadosConfiguracao?.consentimento || false,
       dataConsentimento: dadosConfiguracao?.dataConsentimento ? new Date(dadosConfiguracao.dataConsentimento).toISOString().split('T')[0] : "",

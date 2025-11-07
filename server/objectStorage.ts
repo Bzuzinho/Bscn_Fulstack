@@ -188,8 +188,15 @@ export class ObjectStorageService {
     }
   
     // Extract the path from the URL by removing query parameters and domain
-    const url = new URL(rawPath);
-    const rawObjectPath = url.pathname;
+    let rawObjectPath: string;
+    try {
+      const url = new URL(rawPath);
+      rawObjectPath = url.pathname;
+    } catch (e: any) {
+      // If the URL constructor fails, log and return the raw path unchanged.
+      console.error("normalizeObjectEntityPath: failed to parse URL", rawPath, e?.message ?? e);
+      return rawPath;
+    }
   
     let objectEntityDir = this.getPrivateObjectDir();
     if (!objectEntityDir.endsWith("/")) {

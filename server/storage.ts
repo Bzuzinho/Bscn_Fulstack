@@ -18,38 +18,40 @@ import {
   dadosConfiguracao,
   treinos,
   resultados,
-  type User,
-  type UpsertUser,
-  type Pessoa,
-  type InsertPessoa,
-  type Escalao,
-  type InsertEscalao,
-  type Atividade,
-  type InsertAtividade,
-  type Presenca,
-  type InsertPresenca,
-  type Mensalidade,
-  type InsertMensalidade,
-  type Material,
-  type InsertMaterial,
-  type Emprestimo,
-  type InsertEmprestimo,
-  type Email,
-  type InsertEmail,
-  type Fatura,
-  type TipoMensalidade,
-  type CentroCusto,
-  type DadosDesportivos,
-  type DadosConfiguracao,
-  type Treino,
-  type Resultado,
   insertFaturaSchema,
+  insertPessoaSchema,
   insertTipoMensalidadeSchema,
   insertCentroCustoSchema,
   insertDadosDesportivosSchema,
   insertDadosConfiguracaoSchema,
   insertTreinoSchema,
   insertResultadoSchema,
+  insertEscalaoSchema,
+  insertAtividadeSchema,
+  insertPresencaSchema,
+  insertMensalidadeSchema,
+  insertMaterialSchema,
+  insertEmprestimoSchema,
+  insertEmailSchema,
+} from "@shared/schema";
+import type {
+  UpsertUser,
+  User,
+  Pessoa,
+  Escalao,
+  Atividade,
+  Presenca,
+  Mensalidade,
+  Material,
+  Emprestimo,
+  Email,
+  Fatura,
+  TipoMensalidade,
+  CentroCusto,
+  DadosDesportivos,
+  DadosConfiguracao,
+  Treino,
+  Resultado,
 } from "@shared/schema";
 import { db } from "./db.ts";
 import { eq, and, sql as drizzleSql, gte, lte } from "drizzle-orm";
@@ -115,80 +117,80 @@ export interface IStorage {
   // Pessoas operations (LEGACY - will be deprecated)
   getPessoas(): Promise<Pessoa[]>;
   getPessoa(id: number): Promise<Pessoa | undefined>;
-  createPessoa(pessoa: InsertPessoa): Promise<Pessoa>;
-  updatePessoa(id: number, pessoa: Partial<InsertPessoa>): Promise<Pessoa | undefined>;
+  createPessoa(pessoa: z.infer<typeof insertPessoaSchema>): Promise<Pessoa>;
+  updatePessoa(id: number, pessoa: Partial<z.infer<typeof insertPessoaSchema>>): Promise<Pessoa | undefined>;
   deletePessoa(id: number): Promise<void>;
 
   // Escaloes operations
   getEscaloes(): Promise<Escalao[]>;
   getEscalao(id: number): Promise<Escalao | undefined>;
-  createEscalao(escalao: InsertEscalao): Promise<Escalao>;
-  updateEscalao(id: number, escalao: Partial<InsertEscalao>): Promise<Escalao | undefined>;
+  createEscalao(escalao: z.infer<typeof insertEscalaoSchema>): Promise<Escalao>;
+  updateEscalao(id: number, escalao: Partial<z.infer<typeof insertEscalaoSchema>>): Promise<Escalao | undefined>;
   deleteEscalao(id: number): Promise<void>;
 
   // Atividades operations
   getAtividades(): Promise<Atividade[]>;
   getAtividade(id: number): Promise<Atividade | undefined>;
-  createAtividade(atividade: InsertAtividade): Promise<Atividade>;
-  updateAtividade(id: number, atividade: Partial<InsertAtividade>): Promise<Atividade | undefined>;
+  createAtividade(atividade: z.infer<typeof insertAtividadeSchema>): Promise<Atividade>;
+  updateAtividade(id: number, atividade: Partial<z.infer<typeof insertAtividadeSchema>>): Promise<Atividade | undefined>;
   deleteAtividade(id: number): Promise<void>;
 
   // Presencas operations
   getPresencas(atividadeId?: number): Promise<Presenca[]>;
   getPresenca(id: number): Promise<Presenca | undefined>;
-  createPresenca(presenca: InsertPresenca): Promise<Presenca>;
-  updatePresenca(id: number, presenca: Partial<InsertPresenca>): Promise<Presenca | undefined>;
+  createPresenca(presenca: z.infer<typeof insertPresencaSchema>): Promise<Presenca>;
+  updatePresenca(id: number, presenca: Partial<z.infer<typeof insertPresencaSchema>>): Promise<Presenca | undefined>;
   deletePresenca(id: number): Promise<void>;
 
   // Mensalidades operations
   getMensalidades(pessoaId?: number): Promise<Mensalidade[]>;
   getMensalidade(id: number): Promise<Mensalidade | undefined>;
-  createMensalidade(mensalidade: InsertMensalidade): Promise<Mensalidade>;
-  updateMensalidade(id: number, mensalidade: Partial<InsertMensalidade>): Promise<Mensalidade | undefined>;
+  createMensalidade(mensalidade: z.infer<typeof insertMensalidadeSchema>): Promise<Mensalidade>;
+  updateMensalidade(id: number, mensalidade: Partial<z.infer<typeof insertMensalidadeSchema>>): Promise<Mensalidade | undefined>;
   deleteMensalidade(id: number): Promise<void>;
 
   // Materiais operations
   getMateriais(): Promise<Material[]>;
   getMaterial(id: number): Promise<Material | undefined>;
-  createMaterial(material: InsertMaterial): Promise<Material>;
-  updateMaterial(id: number, material: Partial<InsertMaterial>): Promise<Material | undefined>;
+  createMaterial(material: z.infer<typeof insertMaterialSchema>): Promise<Material>;
+  updateMaterial(id: number, material: Partial<z.infer<typeof insertMaterialSchema>>): Promise<Material | undefined>;
   deleteMaterial(id: number): Promise<void>;
 
   // Emprestimos operations
   getEmprestimos(pessoaId?: number): Promise<Emprestimo[]>;
   getEmprestimo(id: number): Promise<Emprestimo | undefined>;
-  createEmprestimo(emprestimo: InsertEmprestimo): Promise<Emprestimo>;
-  updateEmprestimo(id: number, emprestimo: Partial<InsertEmprestimo>): Promise<Emprestimo | undefined>;
+  createEmprestimo(emprestimo: z.infer<typeof insertEmprestimoSchema>): Promise<Emprestimo>;
+  updateEmprestimo(id: number, emprestimo: Partial<z.infer<typeof insertEmprestimoSchema>>): Promise<Emprestimo | undefined>;
   deleteEmprestimo(id: number): Promise<void>;
 
   // Emails operations
   getEmails(): Promise<Email[]>;
   getEmail(id: number): Promise<Email | undefined>;
-  createEmail(email: InsertEmail): Promise<Email>;
-  updateEmail(id: number, email: Partial<InsertEmail>): Promise<Email | undefined>;
+  createEmail(email: z.infer<typeof insertEmailSchema>): Promise<Email>;
+  updateEmail(id: number, email: Partial<z.infer<typeof insertEmailSchema>>): Promise<Email | undefined>;
   deleteEmail(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
   // User operations (mandatory for Replit Auth)
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
+    const [user] = await db.select().from(users).where(eq(users.id, Number(id)));
     return user;
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
     const [user] = await db
       .insert(users)
-      .values(userData)
+      .values(userData as any)
       .onConflictDoUpdate({
         target: users.id,
         set: {
-          ...userData,
+          ...(userData as any),
           updatedAt: new Date(),
         },
       })
       .returning();
-    return user;
+    return user as User;
   }
 
   async getUsers(filters?: { escalaoId?: number; estado?: string }): Promise<User[]> {
@@ -202,14 +204,14 @@ export class DatabaseStorage implements IStorage {
   async updateUser(id: string, userData: Partial<UpsertUser>): Promise<User | undefined> {
     const [updated] = await db
       .update(users)
-      .set({ ...userData, updatedAt: new Date() })
-      .where(eq(users.id, id))
+      .set({ ...(userData as any), updatedAt: new Date() })
+      .where(eq(users.id, Number(id)))
       .returning();
     return updated;
   }
 
   async deleteUser(id: string): Promise<void> {
-    await db.delete(users).where(eq(users.id, id));
+    await db.delete(users).where(eq(users.id, Number(id)));
   }
 
   // Faturas operations
@@ -272,17 +274,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createFatura(faturaData: z.infer<typeof insertFaturaSchema>): Promise<Fatura> {
-    const [fatura] = await db.insert(faturas).values(faturaData).returning();
-    return fatura;
+    const _faturaResult = await db.insert(faturas).values(faturaData as any).returning();
+    const fatura = (_faturaResult as unknown as Fatura[])[0];
+    return fatura as Fatura;
   }
 
   async updateFatura(id: number, faturaData: Partial<z.infer<typeof insertFaturaSchema>>): Promise<Fatura | undefined> {
     const [updated] = await db
       .update(faturas)
-      .set({ ...faturaData, updatedAt: new Date() })
+      .set({ ...(faturaData as any), updatedAt: new Date() })
       .where(eq(faturas.id, id))
       .returning();
-    return updated;
+    return updated as Fatura | undefined;
   }
 
   async deleteFatura(id: number): Promise<void> {
@@ -312,17 +315,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTipoMensalidade(tipoData: z.infer<typeof insertTipoMensalidadeSchema>): Promise<TipoMensalidade> {
-    const [tipo] = await db.insert(tiposMensalidade).values(tipoData).returning();
-    return tipo;
+    const _tipoResult = await db.insert(tiposMensalidade).values(tipoData as any).returning();
+    const tipo = (_tipoResult as unknown as TipoMensalidade[])[0];
+    return tipo as TipoMensalidade;
   }
 
   async updateTipoMensalidade(id: number, tipoData: Partial<z.infer<typeof insertTipoMensalidadeSchema>>): Promise<TipoMensalidade | undefined> {
     const [updated] = await db
       .update(tiposMensalidade)
-      .set({ ...tipoData, updatedAt: new Date() })
+      .set({ ...(tipoData as any), updatedAt: new Date() })
       .where(eq(tiposMensalidade.id, id))
       .returning();
-    return updated;
+    return updated as TipoMensalidade | undefined;
   }
 
   async deleteTipoMensalidade(id: number): Promise<void> {
@@ -340,17 +344,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCentroCusto(centroData: z.infer<typeof insertCentroCustoSchema>): Promise<CentroCusto> {
-    const [centro] = await db.insert(centrosCusto).values(centroData).returning();
-    return centro;
+    const _centroResult = await db.insert(centrosCusto).values(centroData as any).returning();
+    const centro = (_centroResult as unknown as CentroCusto[])[0];
+    return centro as CentroCusto;
   }
 
   async updateCentroCusto(id: number, centroData: Partial<z.infer<typeof insertCentroCustoSchema>>): Promise<CentroCusto | undefined> {
     const [updated] = await db
       .update(centrosCusto)
-      .set({ ...centroData, updatedAt: new Date() })
+      .set({ ...(centroData as any), updatedAt: new Date() })
       .where(eq(centrosCusto.id, id))
       .returning();
-    return updated;
+    return updated as CentroCusto | undefined;
   }
 
   async deleteCentroCusto(id: number): Promise<void> {
@@ -447,18 +452,19 @@ export class DatabaseStorage implements IStorage {
     return pessoa;
   }
 
-  async createPessoa(pessoa: InsertPessoa): Promise<Pessoa> {
-    const [newPessoa] = await db.insert(pessoas).values(pessoa).returning();
-    return newPessoa;
+  async createPessoa(pessoa: z.infer<typeof insertPessoaSchema>): Promise<Pessoa> {
+    const _pessoaResult = await db.insert(pessoas).values(pessoa as any).returning();
+    const newPessoa = (_pessoaResult as unknown as Pessoa[])[0];
+    return newPessoa as Pessoa;
   }
 
-  async updatePessoa(id: number, pessoa: Partial<InsertPessoa>): Promise<Pessoa | undefined> {
+  async updatePessoa(id: number, pessoa: Partial<z.infer<typeof insertPessoaSchema>>): Promise<Pessoa | undefined> {
     const [updated] = await db
       .update(pessoas)
-      .set({ ...pessoa, updatedAt: new Date() })
+      .set({ ...(pessoa as any), updatedAt: new Date() })
       .where(eq(pessoas.id, id))
       .returning();
-    return updated;
+    return updated as Pessoa | undefined;
   }
 
   async deletePessoa(id: number): Promise<void> {
@@ -475,18 +481,19 @@ export class DatabaseStorage implements IStorage {
     return escalao;
   }
 
-  async createEscalao(escalao: InsertEscalao): Promise<Escalao> {
-    const [newEscalao] = await db.insert(escaloes).values(escalao).returning();
-    return newEscalao;
+  async createEscalao(escalao: z.infer<typeof insertEscalaoSchema>): Promise<Escalao> {
+    const _escalaoResult = await db.insert(escaloes).values(escalao as any).returning();
+    const newEscalao = (_escalaoResult as unknown as Escalao[])[0];
+    return newEscalao as Escalao;
   }
 
-  async updateEscalao(id: number, escalao: Partial<InsertEscalao>): Promise<Escalao | undefined> {
+  async updateEscalao(id: number, escalao: Partial<z.infer<typeof insertEscalaoSchema>>): Promise<Escalao | undefined> {
     const [updated] = await db
       .update(escaloes)
-      .set(escalao)
+      .set(escalao as any)
       .where(eq(escaloes.id, id))
       .returning();
-    return updated;
+    return updated as Escalao | undefined;
   }
 
   async deleteEscalao(id: number): Promise<void> {
@@ -503,18 +510,19 @@ export class DatabaseStorage implements IStorage {
     return atividade;
   }
 
-  async createAtividade(atividade: InsertAtividade): Promise<Atividade> {
-    const [newAtividade] = await db.insert(atividades).values(atividade).returning();
-    return newAtividade;
+  async createAtividade(atividade: z.infer<typeof insertAtividadeSchema>): Promise<Atividade> {
+    const _atividadeResult = await db.insert(atividades).values(atividade as any).returning();
+    const newAtividade = (_atividadeResult as unknown as Atividade[])[0];
+    return newAtividade as Atividade;
   }
 
-  async updateAtividade(id: number, atividade: Partial<InsertAtividade>): Promise<Atividade | undefined> {
+  async updateAtividade(id: number, atividade: Partial<z.infer<typeof insertAtividadeSchema>>): Promise<Atividade | undefined> {
     const [updated] = await db
       .update(atividades)
-      .set(atividade)
+      .set(atividade as any)
       .where(eq(atividades.id, id))
       .returning();
-    return updated;
+    return updated as Atividade | undefined;
   }
 
   async deleteAtividade(id: number): Promise<void> {
@@ -534,18 +542,19 @@ export class DatabaseStorage implements IStorage {
     return presenca;
   }
 
-  async createPresenca(presenca: InsertPresenca): Promise<Presenca> {
-    const [newPresenca] = await db.insert(presencas).values(presenca).returning();
-    return newPresenca;
+  async createPresenca(presenca: z.infer<typeof insertPresencaSchema>): Promise<Presenca> {
+    const _presencaResult = await db.insert(presencas).values(presenca as any).returning();
+    const newPresenca = (_presencaResult as unknown as Presenca[])[0];
+    return newPresenca as Presenca;
   }
 
-  async updatePresenca(id: number, presenca: Partial<InsertPresenca>): Promise<Presenca | undefined> {
+  async updatePresenca(id: number, presenca: Partial<z.infer<typeof insertPresencaSchema>>): Promise<Presenca | undefined> {
     const [updated] = await db
       .update(presencas)
-      .set(presenca)
+      .set(presenca as any)
       .where(eq(presencas.id, id))
       .returning();
-    return updated;
+    return updated as Presenca | undefined;
   }
 
   async deletePresenca(id: number): Promise<void> {
@@ -565,18 +574,19 @@ export class DatabaseStorage implements IStorage {
     return mensalidade;
   }
 
-  async createMensalidade(mensalidade: InsertMensalidade): Promise<Mensalidade> {
-    const [newMensalidade] = await db.insert(mensalidades).values(mensalidade).returning();
-    return newMensalidade;
+  async createMensalidade(mensalidade: z.infer<typeof insertMensalidadeSchema>): Promise<Mensalidade> {
+    const _mensalidadeResult = await db.insert(mensalidades).values(mensalidade as any).returning();
+    const newMensalidade = (_mensalidadeResult as unknown as Mensalidade[])[0];
+    return newMensalidade as Mensalidade;
   }
 
-  async updateMensalidade(id: number, mensalidade: Partial<InsertMensalidade>): Promise<Mensalidade | undefined> {
+  async updateMensalidade(id: number, mensalidade: Partial<z.infer<typeof insertMensalidadeSchema>>): Promise<Mensalidade | undefined> {
     const [updated] = await db
       .update(mensalidades)
-      .set(mensalidade)
+      .set(mensalidade as any)
       .where(eq(mensalidades.id, id))
       .returning();
-    return updated;
+    return updated as Mensalidade | undefined;
   }
 
   async deleteMensalidade(id: number): Promise<void> {
@@ -593,18 +603,19 @@ export class DatabaseStorage implements IStorage {
     return material;
   }
 
-  async createMaterial(material: InsertMaterial): Promise<Material> {
-    const [newMaterial] = await db.insert(materiais).values(material).returning();
-    return newMaterial;
+  async createMaterial(material: z.infer<typeof insertMaterialSchema>): Promise<Material> {
+    const _materialResult = await db.insert(materiais).values(material as any).returning();
+    const newMaterial = (_materialResult as unknown as Material[])[0];
+    return newMaterial as Material;
   }
 
-  async updateMaterial(id: number, material: Partial<InsertMaterial>): Promise<Material | undefined> {
+  async updateMaterial(id: number, material: Partial<z.infer<typeof insertMaterialSchema>>): Promise<Material | undefined> {
     const [updated] = await db
       .update(materiais)
-      .set(material)
+      .set(material as any)
       .where(eq(materiais.id, id))
       .returning();
-    return updated;
+    return updated as Material | undefined;
   }
 
   async deleteMaterial(id: number): Promise<void> {
@@ -624,18 +635,19 @@ export class DatabaseStorage implements IStorage {
     return emprestimo;
   }
 
-  async createEmprestimo(emprestimo: InsertEmprestimo): Promise<Emprestimo> {
-    const [newEmprestimo] = await db.insert(emprestimos).values(emprestimo).returning();
-    return newEmprestimo;
+  async createEmprestimo(emprestimo: z.infer<typeof insertEmprestimoSchema>): Promise<Emprestimo> {
+    const _emprestimoResult = await db.insert(emprestimos).values(emprestimo as any).returning();
+    const newEmprestimo = (_emprestimoResult as unknown as Emprestimo[])[0];
+    return newEmprestimo as Emprestimo;
   }
 
-  async updateEmprestimo(id: number, emprestimo: Partial<InsertEmprestimo>): Promise<Emprestimo | undefined> {
+  async updateEmprestimo(id: number, emprestimo: Partial<z.infer<typeof insertEmprestimoSchema>>): Promise<Emprestimo | undefined> {
     const [updated] = await db
       .update(emprestimos)
-      .set(emprestimo)
+      .set(emprestimo as any)
       .where(eq(emprestimos.id, id))
       .returning();
-    return updated;
+    return updated as Emprestimo | undefined;
   }
 
   async deleteEmprestimo(id: number): Promise<void> {
@@ -652,18 +664,18 @@ export class DatabaseStorage implements IStorage {
     return email;
   }
 
-  async createEmail(email: InsertEmail): Promise<Email> {
-    const [newEmail] = await db.insert(emails).values(email).returning();
-    return newEmail;
+  async createEmail(email: z.infer<typeof insertEmailSchema>): Promise<Email> {
+    const [newEmail] = await db.insert(emails).values(email as any).returning();
+    return newEmail as Email;
   }
 
-  async updateEmail(id: number, email: Partial<InsertEmail>): Promise<Email | undefined> {
+  async updateEmail(id: number, email: Partial<z.infer<typeof insertEmailSchema>>): Promise<Email | undefined> {
     const [updated] = await db
       .update(emails)
-      .set(email)
+      .set(email as any)
       .where(eq(emails.id, id))
       .returning();
-    return updated;
+    return updated as Email | undefined;
   }
 
   async deleteEmail(id: number): Promise<void> {
@@ -685,14 +697,14 @@ export class DatabaseStorage implements IStorage {
     if (existing) {
       const [updated] = await db
         .update(dadosDesportivos)
-        .set(dados)
+        .set(dados as any)
         .where(eq(dadosDesportivos.userId, dados.userId))
         .returning();
       return updated;
     } else {
       const [created] = await db
         .insert(dadosDesportivos)
-        .values(dados)
+        .values(dados as any)
         .returning();
       return created;
     }
@@ -711,17 +723,19 @@ export class DatabaseStorage implements IStorage {
     const existing = await this.getDadosConfiguracao(dados.userId);
     
     if (existing) {
-      const [updated] = await db
+      const _updatedResult = await db
         .update(dadosConfiguracao)
-        .set(dados)
+        .set(dados as any)
         .where(eq(dadosConfiguracao.userId, dados.userId))
         .returning();
+      const updated = (_updatedResult as any)[0];
       return updated;
     } else {
-      const [created] = await db
+      const _createdResult = await db
         .insert(dadosConfiguracao)
-        .values(dados)
+        .values(dados as any)
         .returning();
+      const created = (_createdResult as any)[0];
       return created;
     }
   }
@@ -736,7 +750,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTreino(treino: z.infer<typeof insertTreinoSchema>): Promise<Treino> {
-    const [newTreino] = await db.insert(treinos).values(treino).returning();
+    const _treinoResult = await db.insert(treinos).values(treino as any).returning();
+    const newTreino = (_treinoResult as any)[0];
     return newTreino;
   }
 
@@ -750,7 +765,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createResultado(resultado: z.infer<typeof insertResultadoSchema>): Promise<Resultado> {
-    const [newResultado] = await db.insert(resultados).values(resultado).returning();
+    const _resultadoResult = await db.insert(resultados).values(resultado as any).returning();
+    const newResultado = (_resultadoResult as any)[0];
     return newResultado;
   }
 }

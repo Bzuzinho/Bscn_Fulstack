@@ -34,6 +34,7 @@ type PessoaLocal = {
 
 type EscalaoLocal = { id: number; nome: string };
 import { z } from "zod";
+import { mapPessoaServerToClient, mapPessoaClientToServer } from "@/lib/mappers";
 import { format } from "date-fns";
 import { pt } from "date-fns/locale";
 
@@ -85,9 +86,11 @@ export default function Pessoas() {
     },
   });
 
-  const { data: users = [], isLoading: isUsersLoading } = useQuery<PessoaLocal[]>({
+  const { data: usersRaw = [], isLoading: isUsersLoading } = useQuery<any[]>({
     queryKey: ["/api/pessoas"],
   });
+  // map server shapes to UI shapes
+  const users = Array.isArray(usersRaw) ? usersRaw.map((u) => mapPessoaServerToClient(u)) : [];
 
   const { data: escaloes = [] } = useQuery<EscalaoLocal[]>({
     queryKey: ["/api/escaloes"],
@@ -95,22 +98,9 @@ export default function Pessoas() {
 
   const saveUserMutation = useMutation({
     mutationFn: async (data: UserFormData) => {
-      // Build payload that the server expects. The Pessoas endpoint accepts
-      // both legacy `pessoas` fields and some UI names; here we send the DB
-      // aligned properties. Note: server will map data_nascimento -> dataNascimento
-      const payload = {
-        nome: data.nome,
-        email: data.email || null,
-        telemovel: data.telemovel || null,
-        data_nascimento: data.dataNascimento || null,
-        nif: data.nif || null,
-        morada: data.morada || null,
-        cp: data.cp || null,
-        localidade: data.localidade || null,
-        sexo: data.sexo || null,
-        tipo: 'atleta',
-      } as any;
-
+  // centralize mapping for consistency
+  const payload = mapPessoaClientToServer(data as any);
+      payload.tipo = "atleta";
       await apiRequest("POST", "/api/pessoas", payload);
     },
     onSuccess: () => {

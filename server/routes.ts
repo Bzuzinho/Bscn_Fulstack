@@ -109,14 +109,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       let pessoas = await storage.getPessoas();
       
-      // Apply filters if provided
-      if (req.query.tipo) {
-        pessoas = pessoas.filter(p => p.tipo === req.query.tipo);
-      }
-      if (req.query.escalao) {
-        const escalaoId = parseInt(req.query.escalao as string);
-        pessoas = pessoas.filter(p => p.escalao === escalaoId);
-      }
+      // (legacy filters removed) If you need filtering by type or escalao
+      // reintroduce here after adding the appropriate columns to the `pessoas` table.
       
       res.json(pessoas);
     } catch (error) {
@@ -172,6 +166,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put('/api/pessoas/:id', isAuthenticated, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
+      // Permission check: only admin, the pessoa itself, or its encarregado may update
+  const sessionUserId = (req.user as any)?.claims?.sub || (req.user as any)?.id;
+  const existingPessoa = await storage.getPessoa(id);
+      if (!existingPessoa) return res.status(404).json({ message: "Pessoa not found" });
+
+  const isAdmin = ((req.user as any)?.claims?.role || "").toString().toLowerCase() === "admin";
+  const isSelf = String(sessionUserId) === String((existingPessoa as any).userId ?? (existingPessoa as any).id);
+  const isEncarregado = String(sessionUserId) === String((existingPessoa as any).encarregado_id ?? (existingPessoa as any).encarregadoId ?? "");
+
+      if (!isAdmin && !isSelf && !isEncarregado) {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+
       const validated = insertPessoaSchema.partial().parse(req.body);
       const pessoa = await storage.updatePessoa(id, validated);
       if (!pessoa) {
