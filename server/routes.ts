@@ -712,6 +712,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Aliases for legacy clients that call /api/pessoas/:id/... keep compatibility
+  app.get('/api/pessoas/:id/dados-desportivos', isAuthenticated, async (req, res) => {
+    try {
+      const dados = await storage.getDadosDesportivos(String(req.params.id));
+      res.json(dados || {});
+    } catch (error) {
+      console.error('Error fetching dados desportivos (alias):', error);
+      res.status(500).json({ message: 'Failed to fetch dados desportivos' });
+    }
+  });
+
+  app.put('/api/pessoas/:id/dados-desportivos', isAuthenticated, async (req, res) => {
+    try {
+      const dados = await storage.upsertDadosDesportivos({ ...(req.body || {}), userId: String(req.params.id) });
+      res.json(dados);
+    } catch (error) {
+      console.error('Error updating dados desportivos (alias):', error);
+      res.status(500).json({ message: 'Failed to update dados desportivos' });
+    }
+  });
+
   // Dados Configuracao routes
   app.get('/api/users/:id/dados-configuracao', isAuthenticated, async (req, res) => {
     try {
@@ -733,6 +754,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error updating dados configuracao:", error);
       res.status(500).json({ message: "Failed to update dados configuracao" });
+    }
+  });
+
+  // Dados Financeiros routes (basic upsert to dados_financeiros)
+  app.get('/api/users/:id/dados-financeiros', isAuthenticated, async (req, res) => {
+    try {
+      const q = await pool.query('SELECT * FROM dados_financeiros WHERE user_id = $1 LIMIT 1', [String(req.params.id)]);
+      res.json(q.rows[0] || {});
+    } catch (error) {
+      console.error('Error fetching dados financeiros:', error);
+      res.status(500).json({ message: 'Failed to fetch dados financeiros' });
+    }
+  });
+
+  app.put('/api/users/:id/dados-financeiros', isAuthenticated, async (req, res) => {
+    try {
+      const { mensalidadeId, estadoPagamento, numeroRecibo, referenciaPagamento } = req.body || {};
+      // Upsert semantics: delete existing and insert new for simplicity
+      await pool.query('DELETE FROM dados_financeiros WHERE user_id = $1', [String(req.params.id)]);
+      const insert = await pool.query(
+        'INSERT INTO dados_financeiros (user_id, mensalidade_id, estado_pagamento, numero_recibo, referencia_pagamento, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, now(), now()) RETURNING *',
+        [String(req.params.id), mensalidadeId || null, estadoPagamento || null, numeroRecibo || null, referenciaPagamento || null]
+      );
+      res.json(insert.rows[0]);
+    } catch (error) {
+      console.error('Error updating dados financeiros:', error);
+      res.status(500).json({ message: 'Failed to update dados financeiros' });
+    }
+  });
+
+  // Password reset (dev) - no email delivery, returns success and logs action
+  app.post('/api/users/:id/send-reset', isAuthenticated, async (req, res) => {
+    try {
+      const actor = (req.user as any)?.claims?.email || (req.user as any)?.claims?.sub;
+      console.log(`Password reset requested for user ${req.params.id} by ${actor}`);
+      // In production, integrate with email service. Here we just return success.
+      res.json({ success: true, message: 'Password reset triggered (dev)' });
+    } catch (error) {
+      console.error('Error triggering password reset:', error);
+      res.status(500).json({ message: 'Failed to trigger password reset' });
+    }
+  });
+
+  // Alias for pessoas dados-configuracao
+  app.get('/api/pessoas/:id/dados-configuracao', isAuthenticated, async (req, res) => {
+    try {
+      const dados = await storage.getDadosConfiguracao(String(req.params.id));
+      res.json(dados || {});
+    } catch (error) {
+      console.error('Error fetching dados configuracao (alias):', error);
+      res.status(500).json({ message: 'Failed to fetch dados configuracao' });
+    }
+  });
+
+  app.put('/api/pessoas/:id/dados-configuracao', isAuthenticated, async (req, res) => {
+    try {
+      const dados = await storage.upsertDadosConfiguracao({ ...(req.body || {}), userId: String(req.params.id) });
+      res.json(dados);
+    } catch (error) {
+      console.error('Error updating dados configuracao (alias):', error);
+      res.status(500).json({ message: 'Failed to update dados configuracao' });
     }
   });
 

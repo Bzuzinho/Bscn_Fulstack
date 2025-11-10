@@ -1282,6 +1282,54 @@ function DadosDesportivosTab({
 }
 
 function DadosFinanceirosTab({ userId, faturas }: { userId: string; faturas: Fatura[] }) {
+  const { toast } = useToast();
+  const { data: tipos = [] } = useQuery<any[]>({
+    queryKey: ['/api/tipos-mensalidade'],
+    queryFn: async () => {
+      const resp = await fetch('/api/tipos-mensalidade');
+      if (!resp.ok) return [];
+      return resp.json();
+    },
+  });
+
+  const { data: centros = [] } = useQuery<any[]>({
+    queryKey: ['/api/centros-custo'],
+    queryFn: async () => {
+      const resp = await fetch('/api/centros-custo');
+      if (!resp.ok) return [];
+      return resp.json();
+    },
+  });
+
+  const [contaCorrente, setContaCorrente] = useState<string>('');
+  const [selectedTipo, setSelectedTipo] = useState<number | null>(null);
+  const [selectedCentro, setSelectedCentro] = useState<number | null>(null);
+
+  // Load existing user-level finance settings (tipo_mensalidade in users or dados_financeiros)
+  useQuery({
+    queryKey: ['/api/users', userId, 'dados-financeiros'],
+    queryFn: async () => {
+      const resp = await fetch(`/api/users/${userId}/dados-financeiros`);
+      if (!resp.ok) return {};
+      return resp.json();
+    },
+    onSuccess: (data: any) => {
+      if (data && data.mensalidade_id) setSelectedTipo(Number(data.mensalidade_id));
+    },
+  });
+
+  // Read conta_corrente from user record (best-effort)
+  useQuery({
+    queryKey: ['/api/users', userId],
+    queryFn: async () => {
+      const resp = await fetch(`/api/users/${userId}`);
+      if (!resp.ok) return {};
+      return resp.json();
+    },
+    onSuccess: (u: any) => {
+      if (u && (u.contaCorrente || u.conta_corrente)) setContaCorrente(u.contaCorrente ?? u.conta_corrente ?? '');
+    },
+  });
   const estadoFaturaColors = {
     futuro: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
     pendente: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
@@ -1304,6 +1352,51 @@ function DadosFinanceirosTab({ userId, faturas }: { userId: string; faturas: Fat
 
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Configuração Financeira</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Tipo Mensalidade</label>
+              <select value={selectedTipo ?? ''} onChange={(e) => setSelectedTipo(e.target.value ? Number(e.target.value) : null)} className="w-full">
+                <option value="">Nenhum</option>
+                {tipos.map((t:any) => <option key={t.id} value={t.id}>{t.designacao}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Conta Corrente</label>
+              <input value={contaCorrente} onChange={(e) => setContaCorrente(e.target.value)} className="w-full" />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Centro de Custo</label>
+              <select value={selectedCentro ?? ''} onChange={(e) => setSelectedCentro(e.target.value ? Number(e.target.value) : null)} className="w-full">
+                <option value="">Nenhum</option>
+                {centros.map((c:any) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end mt-4">
+            <Button onClick={async () => {
+              try {
+                // Save contaCorrente and tipoMensalidade to user / dados-financeiros
+                await fetch(`/api/users/${userId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contaCorrente, tipoMensalidadeId: selectedTipo }) });
+                await fetch(`/api/users/${userId}/dados-financeiros`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mensalidadeId: selectedTipo, centroCustoId: selectedCentro }) });
+                toast({ title: 'Atualizado', description: 'Dados financeiros atualizados.' });
+                queryClient.invalidateQueries({ queryKey: ['/api/users', userId, 'dados-financeiros'] });
+              } catch (err) {
+                toast({ title: 'Erro', description: 'Falha ao atualizar dados financeiros', variant: 'destructive' });
+              }
+            }}>
+              Guardar
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-3">
@@ -1411,6 +1504,7 @@ function ConfiguracaoTab({
       afiliacao: dadosConfiguracao?.afiliacao || false,
       dataAfiliacao: dadosConfiguracao?.dataAfiliacao ? new Date(dadosConfiguracao.dataAfiliacao).toISOString().split('T')[0] : "",
       ficheiroAfiliacao: dadosConfiguracao?.ficheiroAfiliacao || "",
+      rgpdAssinado: (dadosConfiguracao as any)?.rgpdAssinado || false,
     },
   });
 
@@ -1469,6 +1563,20 @@ function ConfiguracaoTab({
                         <FormLabel>Ficheiro Consentimento</FormLabel>
                         <FormControl>
                           <Input {...field} placeholder="Caminho do ficheiro" data-testid="input-ficheiro-consentimento" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="rgpdAssinado"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>RGPD Assinado</FormLabel>
+                        <FormControl>
+                          <input type="checkbox" checked={!!field.value} onChange={(e) => field.onChange(e.target.checked)} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
