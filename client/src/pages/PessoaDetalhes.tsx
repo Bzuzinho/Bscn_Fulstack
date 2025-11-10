@@ -162,6 +162,35 @@ function PessoaDetalhesInner() {
     },
   });
 
+  const { data: roles = [] } = useQuery<any[]>({
+    queryKey: ['/api/roles'],
+    queryFn: async () => {
+      const resp = await fetch('/api/roles');
+      if (!resp.ok) return [];
+      return resp.json();
+    },
+  });
+
+  const { data: encarregados = [] } = useQuery<User[]>({
+    queryKey: ['/api/encarregados'],
+    queryFn: async () => {
+      const resp = await fetch('/api/encarregados');
+      if (!resp.ok) return [];
+      const arr = await resp.json();
+      return Array.isArray(arr) ? arr.map(mapPessoaServerToClient) : arr;
+    },
+  });
+
+  const { data: minors = [] } = useQuery<User[]>({
+    queryKey: ['/api/minors'],
+    queryFn: async () => {
+      const resp = await fetch('/api/minors');
+      if (!resp.ok) return [];
+      const arr = await resp.json();
+      return Array.isArray(arr) ? arr.map(mapPessoaServerToClient) : arr;
+    },
+  });
+
   const { data: dadosDesportivos } = useQuery<DadosDesportivos>({
     queryKey: ["/api/pessoas", id, "dados-desportivos"],
     queryFn: async () => {
@@ -687,13 +716,21 @@ function DadosPessoaisTab({ user, escaloes, currentUser }: { user: User; escaloe
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {allPessoas
-                              .filter((p: any) => p.id !== user.id)
-                              .map((p: any) => (
-                                <SelectItem key={p.id} value={String(p.id)}>
-                                  {p.name || p.nome}
-                                </SelectItem>
-                              ))}
+                            {Array.isArray(encarregados)
+                              ? encarregados
+                                  .filter((p: any) => p.id !== user.id)
+                                  .map((p: any) => (
+                                    <SelectItem key={p.id} value={String(p.id)}>
+                                      {p.name || p.nome}
+                                    </SelectItem>
+                                  ))
+                              : allPessoas
+                                  .filter((p: any) => p.id !== user.id)
+                                  .map((p: any) => (
+                                    <SelectItem key={p.id} value={String(p.id)}>
+                                      {p.name || p.nome}
+                                    </SelectItem>
+                                  ))}
                           </SelectContent>
                         </Select>
                       </FormControl>
@@ -701,6 +738,47 @@ function DadosPessoaisTab({ user, escaloes, currentUser }: { user: User; escaloe
                     </FormItem>
                   )}
                 />
+              )}
+
+              {/* If the current editing user is a guardian (has role 'encarregado') and is not a minor, allow assigning educando(s) */}
+              {!form.getValues('menor') && user && (user.role || '').toString().toLowerCase().includes('encarregado') && (
+                <FormItem className="col-span-3">
+                  <FormLabel>Adicionar Educando</FormLabel>
+                  <div className="flex items-center gap-3">
+                    <Select onValueChange={(v) => setSelectedEducando(v ? parseInt(v) : null)} value={selectedEducando ? String(selectedEducando) : ""}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Escolher educando" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {Array.isArray(minors) ? minors.map((m: any) => (
+                          <SelectItem key={m.id} value={String(m.id)}>
+                            {m.name || m.nome}
+                          </SelectItem>
+                        )) : allPessoas.filter((p:any)=>p.menor).map((m:any)=> (
+                          <SelectItem key={m.id} value={String(m.id)}>
+                            {m.name || m.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button onClick={async () => {
+                      if (!selectedEducando) return;
+                      try {
+                        const resp = await fetch('/api/encarregado_user', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ userId: selectedEducando, encarregadoId: user.id }),
+                        });
+                        if (!resp.ok) throw new Error('Failed to link educando');
+                        toast({ title: 'Ligado', description: 'Educando ligado a este encarregado.' });
+                      } catch (err) {
+                        toast({ title: 'Erro', description: (err as any).message || 'Falha ao ligar educando', variant: 'destructive' });
+                      }
+                    }}>Adicionar</Button>
+                  </div>
+                </FormItem>
               )}
 
               <FormField

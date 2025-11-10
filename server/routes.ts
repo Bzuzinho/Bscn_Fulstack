@@ -173,7 +173,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const isAdmin = ((req.user as any)?.claims?.role || "").toString().toLowerCase() === "admin";
   const isSelf = String(sessionUserId) === String((existingPessoa as any).userId ?? (existingPessoa as any).id);
-  const isEncarregado = String(sessionUserId) === String((existingPessoa as any).encarregado_id ?? (existingPessoa as any).encarregadoId ?? "");
+  // Also allow if there exists an entry in encarregado_user linking this pessoa -> session user
+  let isEncarregado = String(sessionUserId) === String((existingPessoa as any).encarregado_id ?? (existingPessoa as any).encarregadoId ?? "");
+  try {
+    const q = await pool.query('SELECT 1 FROM encarregado_user WHERE user_id = $1 AND encarregado_id = $2 LIMIT 1', [id, sessionUserId]);
+    if (q && q.rowCount && q.rowCount > 0) isEncarregado = true;
+  } catch (err) {
+    // If the table doesn't exist or query fails, silently ignore - fallback to single-field check
+    console.error('encarregado_user check failed', err);
+  }
 
       if (!isAdmin && !isSelf && !isEncarregado) {
         return res.status(403).json({ message: 'Forbidden' });
@@ -234,6 +242,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching atividades:", error);
       res.status(500).json({ message: "Failed to fetch atividades" });
+    }
+  });
+
+  // Roles (tipo_membro) - lightweight endpoints
+  app.get('/api/roles', isAuthenticated, async (req, res) => {
+    try {
+      const q = await pool.query('SELECT id, name FROM roles ORDER BY name');
+      res.json(q.rows);
+    } catch (error) {
+      console.error('Error fetching roles:', error);
+      res.status(500).json({ message: 'Failed to fetch roles' });
+    }
+  });
+
+  // Get roles for a specific user
+  app.get('/api/users/:id/roles', isAuthenticated, async (req, res) => {
+    try {
+      const userId = String(req.params.id);
+      const q = await pool.query(`SELECT r.id, r.name FROM model_has_roles m JOIN roles r ON r.id = m.role_id WHERE m.model_id = $1`, [userId]);
+      res.json(q.rows.map((r: any) => r.name));
+    } catch (error) {
+      console.error('Error fetching user roles:', error);
+      res.status(500).json({ message: 'Failed to fetch user roles' });
+    }
+  });
+
+  // Set roles for a specific user (admin only)
+  app.put('/api/users/:id/roles', isAuthenticated, async (req, res) => {
+    try {
+      const actorRole = ((req.user as any)?.claims?.role || "").toString().toLowerCase();
+      if (actorRole !== 'admin') return res.status(403).json({ message: 'Only admin can set roles' });
+      const userId = String(req.params.id);
+      const rolesToSet: number[] = Array.isArray(req.body) ? req.body : [];
+      // Replace existing model_has_roles entries for this user
+      await pool.query('DELETE FROM model_has_roles WHERE model_id = $1', [userId]);
+      for (const roleId of rolesToSet) {
+        await pool.query('INSERT INTO model_has_roles (role_id, model_type, model_id) VALUES ($1, $2, $3)', [roleId, 'users', userId]);
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error setting user roles:', error);
+      res.status(500).json({ message: 'Failed to set user roles' });
+    }
+  });
+
+  // List users that are guardians (role 'encarregado') or listed in model_has_roles
+  app.get('/api/encarregados', isAuthenticated, async (req, res) => {
+    try {
+      const q = await pool.query(`
+        SELECT u.* FROM users u
+        WHERE u.role = $1 OR EXISTS (
+          SELECT 1 FROM model_has_roles m JOIN roles r ON r.id = m.role_id WHERE m.model_id = u.id::text AND r.name = $1
+        )
+      `, ['encarregado']);
+      res.json(q.rows);
+    } catch (error) {
+      console.error('Error fetching encarregados:', error);
+      res.status(500).json({ message: 'Failed to fetch encarregados' });
+    }
+  });
+
+  // List minors (users where menor = true)
+  app.get('/api/minors', isAuthenticated, async (req, res) => {
+    try {
+      const q = await pool.query(`SELECT * FROM users WHERE menor = true`);
+      res.json(q.rows);
+    } catch (error) {
+      console.error('Error fetching minors:', error);
+      res.status(500).json({ message: 'Failed to fetch minors' });
+    }
+  });
+
+  // Create an encarregado_user relation (link guardian -> educando)
+  app.post('/api/encarregado_user', isAuthenticated, async (req, res) => {
+    try {
+      const { userId, encarregadoId } = req.body || {};
+      if (!userId || !encarregadoId) return res.status(400).json({ message: 'userId and encarregadoId required' });
+      const insert = await pool.query('INSERT INTO encarregado_user (user_id, encarregado_id, created_at, updated_at) VALUES ($1, $2, now(), now()) RETURNING *', [userId, encarregadoId]);
+      res.status(201).json(insert.rows[0]);
+    } catch (error) {
+      console.error('Error creating encarregado_user:', error);
+      res.status(500).json({ message: 'Failed to create encarregado_user' });
     }
   });
 
