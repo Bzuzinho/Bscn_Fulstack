@@ -13,16 +13,30 @@ app.use((req, res, next) => {
 
   const originalResJson = res.json;
   res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
+    capturedJsonResponse = bodyJson as any;
     return originalResJson.apply(res, [bodyJson, ...args]);
   };
+
+  // safe stringify that converts BigInt to string and never throws
+  function safeStringify(obj: any) {
+    try {
+      return JSON.stringify(obj, (_k, v) => (typeof v === 'bigint' ? v.toString() : v));
+    } catch (err) {
+      try {
+        // last resort: simple toString for non-serializable values
+        return String(obj);
+      } catch (_e) {
+        return '<unserializable>';
+      }
+    }
+  }
 
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+        logLine += ` :: ${safeStringify(capturedJsonResponse)}`;
       }
 
       if (logLine.length > 80) {

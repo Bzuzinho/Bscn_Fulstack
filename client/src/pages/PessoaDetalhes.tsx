@@ -127,6 +127,97 @@ class ErrorBoundary extends React.Component<any, { error: any | null }> {
   }
 }
 
+// RolesManager component: fetches available roles and current user roles; allows admin to set roles and trigger password reset
+function RolesManager({ userId }: { userId: string }) {
+  const { toast } = useToast();
+  const { user: currentUser } = useAuth() as any;
+  const isAdmin = (currentUser?.role ?? "").toString().toLowerCase() === "admin";
+
+  const { data: roles = [] } = useQuery<any[]>({
+    queryKey: ['/api/roles', 'list'],
+    queryFn: async () => {
+      const resp = await fetch('/api/roles', { credentials: 'include' });
+      if (!resp.ok) return [];
+      return resp.json();
+    },
+  });
+
+  const { data: userRoles = [] } = useQuery<string[]>({
+    queryKey: ['/api/users', userId, 'roles'],
+    queryFn: async () => {
+      const resp = await fetch(`/api/users/${userId}/roles`, { credentials: 'include' });
+      if (!resp.ok) return [];
+      return resp.json();
+    },
+  });
+
+  const [selectedRoleIds, setSelectedRoleIds] = React.useState<number[]>([]);
+
+  React.useEffect(() => {
+    if (!roles || roles.length === 0) return;
+    if (!userRoles) return;
+    const ids: number[] = roles.filter((r: any) => userRoles.includes(r.name)).map((r: any) => r.id);
+    setSelectedRoleIds(ids);
+  }, [roles, userRoles]);
+
+  const toggleRole = (roleId: number) => {
+    setSelectedRoleIds((prev) => (prev.includes(roleId) ? prev.filter((r) => r !== roleId) : [...prev, roleId]));
+  };
+
+  const saveRoles = async () => {
+    try {
+      if (!isAdmin) {
+        toast({ title: 'Permissão negada', description: 'Apenas administradores podem alterar roles', variant: 'destructive' });
+        return;
+      }
+      await apiRequest('PUT', `/api/users/${userId}/roles`, selectedRoleIds);
+      toast({ title: 'Permissões atualizadas', description: 'As roles do utilizador foram atualizadas.' });
+      queryClient.invalidateQueries({ queryKey: ['/api/users', userId, 'roles'] });
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err?.message || 'Falha ao actualizar roles', variant: 'destructive' });
+    }
+  };
+
+  const sendReset = async () => {
+    try {
+      const resp = await apiRequest('POST', `/api/users/${userId}/send-reset`);
+      const body = await resp.json();
+      toast({ title: 'Reset pedido', description: body?.message || 'Pedido de reset enviado.' });
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err?.message || 'Falha ao enviar reset', variant: 'destructive' });
+    }
+  };
+
+  return (
+    <div className="mt-4">
+      <div className="mb-3">
+        <div className="text-sm font-medium mb-2">Roles Disponíveis</div>
+        <div className="grid gap-2">
+          {roles.length === 0 ? (
+            <div className="text-sm text-muted-foreground">Sem roles definidas</div>
+          ) : (
+            roles.map((r: any) => (
+              <label key={r.id} className="inline-flex items-center gap-2">
+                <input type="checkbox" checked={selectedRoleIds.includes(r.id)} onChange={() => toggleRole(r.id)} disabled={!isAdmin} />
+                <span className="text-sm">{r.name}</span>
+              </label>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="flex gap-3">
+        <Button onClick={saveRoles} disabled={!isAdmin} size="sm">
+          Guardar Permissões
+        </Button>
+        <Button onClick={sendReset} variant="secondary" size="sm">
+          Enviar Reset de Password
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function PessoaDetalhesInner() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
@@ -1659,9 +1750,10 @@ function ConfiguracaoTab({
                 <div className="p-4 bg-muted rounded-lg">
                   <p className="text-sm font-medium">Perfil Atual:</p>
                   <Badge className="mt-2">{userRole || "membro"}</Badge>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Para alterar permissões, contacte o administrador do sistema.
-                  </p>
+                  <p className="text-xs text-muted-foreground mt-2">Gerir permissões (admin apenas)</p>
+
+                  {/* Roles management for admins */}
+                  <RolesManager userId={userId} />
                 </div>
               </div>
             </div>

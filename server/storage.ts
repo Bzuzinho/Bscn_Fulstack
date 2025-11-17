@@ -57,6 +57,48 @@ import { db } from "./db.ts";
 import { eq, and, sql as drizzleSql, gte, lte } from "drizzle-orm";
 import { z } from "zod";
 
+// Helper: normalize DB rows replacing BigInt with safe JS values for JSON
+function normalizeRow<T>(row: T): T {
+  const seen = new WeakSet();
+  function reviver(v: any): any {
+    if (v === null || typeof v !== 'object') return v;
+    if (seen.has(v)) return v;
+    seen.add(v);
+    for (const k of Object.keys(v)) {
+      const val = (v as any)[k];
+      if (typeof val === 'bigint') {
+        // convert to string to avoid precision loss
+        (v as any)[k] = val.toString();
+      } else if (Array.isArray(val)) {
+        (v as any)[k] = val.map(item => reviver(item));
+      } else if (val && typeof val === 'object') {
+        reviver(val);
+      }
+    }
+    return v;
+  }
+  // shallow clone then walk
+  try {
+    const cloned = JSON.parse(JSON.stringify(row, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)));
+    return cloned as T;
+  } catch {
+    // fallback to recursive conversion (handles nested BigInt but avoids JSON stringify issues)
+    const copy = (Array.isArray(row) ? [] : {}) as any;
+    function walk(src: any, dst: any) {
+      if (src === null || typeof src !== 'object') return src;
+      for (const key of Object.keys(src)) {
+        const val = src[key];
+        if (typeof val === 'bigint') dst[key] = val.toString();
+        else if (Array.isArray(val)) { dst[key] = []; val.forEach((it: any, i: number) => dst[key][i] = walk(it, {})); }
+        else if (val && typeof val === 'object') { dst[key] = {}; walk(val, dst[key]); }
+        else dst[key] = val;
+      }
+      return dst;
+    }
+    return walk(row as any, copy) as T;
+  }
+}
+
 export interface IStorage {
   // User operations (mandatory for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
@@ -217,7 +259,8 @@ export class DatabaseStorage implements IStorage {
   // Faturas operations
   async getFaturas(userId?: string): Promise<Fatura[]> {
     if (userId) {
-      return db.select().from(faturas).where(eq(faturas.userId, userId));
+      // faturas.userId is a numeric column in the DB (mode: number)
+      return db.select().from(faturas).where(eq(faturas.userId, Number(userId)));
     }
     return db.select().from(faturas);
   }
@@ -230,7 +273,7 @@ export class DatabaseStorage implements IStorage {
       })
       .from(faturas)
       .leftJoin(users, eq(faturas.userId, users.id))
-      .where(eq(faturas.id, id))
+      .where(eq(faturas.id, BigInt(id)))
       .limit(1);
     
     if (result.length === 0) return undefined;
@@ -251,7 +294,7 @@ export class DatabaseStorage implements IStorage {
           })
           .from(faturas)
           .leftJoin(users, eq(faturas.userId, users.id))
-          .where(eq(faturas.userId, userId))
+          .where(eq(faturas.userId, Number(userId)))
       : db
           .select({
             fatura: faturas,
@@ -269,7 +312,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getFatura(id: number): Promise<Fatura | undefined> {
-    const [fatura] = await db.select().from(faturas).where(eq(faturas.id, id));
+    const [fatura] = await db.select().from(faturas).where(eq(faturas.id, BigInt(id)));
     return fatura;
   }
 
@@ -283,13 +326,13 @@ export class DatabaseStorage implements IStorage {
     const [updated] = await db
       .update(faturas)
       .set({ ...(faturaData as any), updatedAt: new Date() })
-      .where(eq(faturas.id, id))
+  .where(eq(faturas.id, BigInt(id)))
       .returning();
     return updated as Fatura | undefined;
   }
 
   async deleteFatura(id: number): Promise<void> {
-    await db.delete(faturas).where(eq(faturas.id, id));
+    await db.delete(faturas).where(eq(faturas.id, BigInt(id)));
   }
 
   async gerarFaturasAnuais(userId: string, epoca?: string, dataInicio?: string): Promise<any> {
@@ -310,7 +353,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getTipoMensalidade(id: number): Promise<TipoMensalidade | undefined> {
-    const [tipo] = await db.select().from(tiposMensalidade).where(eq(tiposMensalidade.id, id));
+    const [tipo] = await db.select().from(tiposMensalidade).where(eq(tiposMensalidade.id, BigInt(id)));
     return tipo;
   }
 
@@ -324,13 +367,13 @@ export class DatabaseStorage implements IStorage {
     const [updated] = await db
       .update(tiposMensalidade)
       .set({ ...(tipoData as any), updatedAt: new Date() })
-      .where(eq(tiposMensalidade.id, id))
+  .where(eq(tiposMensalidade.id, BigInt(id)))
       .returning();
     return updated as TipoMensalidade | undefined;
   }
 
   async deleteTipoMensalidade(id: number): Promise<void> {
-    await db.delete(tiposMensalidade).where(eq(tiposMensalidade.id, id));
+    await db.delete(tiposMensalidade).where(eq(tiposMensalidade.id, BigInt(id)));
   }
 
   // Centros de Custo operations
@@ -353,7 +396,7 @@ export class DatabaseStorage implements IStorage {
     const [updated] = await db
       .update(centrosCusto)
       .set({ ...(centroData as any), updatedAt: new Date() })
-      .where(eq(centrosCusto.id, id))
+  .where(eq(centrosCusto.id, id))
       .returning();
     return updated as CentroCusto | undefined;
   }
@@ -444,31 +487,32 @@ export class DatabaseStorage implements IStorage {
 
   // Pessoas operations (LEGACY - will be deprecated)
   async getPessoas(): Promise<Pessoa[]> {
-    return db.select().from(pessoas);
+    const rows = await db.select().from(pessoas);
+    return rows.map(r => normalizeRow(r)) as Pessoa[];
   }
 
   async getPessoa(id: number): Promise<Pessoa | undefined> {
-    const [pessoa] = await db.select().from(pessoas).where(eq(pessoas.id, id));
-    return pessoa;
+    const [pessoa] = await db.select().from(pessoas).where(eq(pessoas.id, BigInt(id)));
+    return pessoa ? normalizeRow(pessoa) as Pessoa : undefined;
   }
 
   async createPessoa(pessoa: z.infer<typeof insertPessoaSchema>): Promise<Pessoa> {
     const _pessoaResult = await db.insert(pessoas).values(pessoa as any).returning();
     const newPessoa = (_pessoaResult as unknown as Pessoa[])[0];
-    return newPessoa as Pessoa;
+    return normalizeRow(newPessoa) as Pessoa;
   }
 
   async updatePessoa(id: number, pessoa: Partial<z.infer<typeof insertPessoaSchema>>): Promise<Pessoa | undefined> {
     const [updated] = await db
       .update(pessoas)
       .set({ ...(pessoa as any), updatedAt: new Date() })
-      .where(eq(pessoas.id, id))
+  .where(eq(pessoas.id, BigInt(id)))
       .returning();
-    return updated as Pessoa | undefined;
+    return updated ? normalizeRow(updated) as Pessoa : undefined;
   }
 
   async deletePessoa(id: number): Promise<void> {
-    await db.delete(pessoas).where(eq(pessoas.id, id));
+    await db.delete(pessoas).where(eq(pessoas.id, BigInt(id)));
   }
 
   // Escaloes operations
@@ -477,7 +521,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getEscalao(id: number): Promise<Escalao | undefined> {
-    const [escalao] = await db.select().from(escaloes).where(eq(escaloes.id, id));
+    const [escalao] = await db.select().from(escaloes).where(eq(escaloes.id, BigInt(id)));
     return escalao;
   }
 
@@ -491,13 +535,13 @@ export class DatabaseStorage implements IStorage {
     const [updated] = await db
       .update(escaloes)
       .set(escalao as any)
-      .where(eq(escaloes.id, id))
+  .where(eq(escaloes.id, BigInt(id)))
       .returning();
     return updated as Escalao | undefined;
   }
 
   async deleteEscalao(id: number): Promise<void> {
-    await db.delete(escaloes).where(eq(escaloes.id, id));
+    await db.delete(escaloes).where(eq(escaloes.id, BigInt(id)));
   }
 
   // Atividades operations
@@ -506,7 +550,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAtividade(id: number): Promise<Atividade | undefined> {
-    const [atividade] = await db.select().from(atividades).where(eq(atividades.id, id));
+    const [atividade] = await db.select().from(atividades).where(eq(atividades.id, BigInt(id)));
     return atividade;
   }
 
@@ -520,25 +564,30 @@ export class DatabaseStorage implements IStorage {
     const [updated] = await db
       .update(atividades)
       .set(atividade as any)
-      .where(eq(atividades.id, id))
+  .where(eq(atividades.id, BigInt(id)))
       .returning();
     return updated as Atividade | undefined;
   }
 
   async deleteAtividade(id: number): Promise<void> {
-    await db.delete(atividades).where(eq(atividades.id, id));
+    await db.delete(atividades).where(eq(atividades.id, BigInt(id)));
   }
 
   // Presencas operations
   async getPresencas(atividadeId?: number): Promise<Presenca[]> {
+    // The introspected schema doesn't include an explicit atividadeId column on
+    // `presencas` in all databases. Fetch rows and filter in JS when an
+    // atividadeId is provided (non-destructive and compatible with both old
+    // and new DB shapes).
+    const all = await db.select().from(presencas);
     if (atividadeId) {
-      return db.select().from(presencas).where(eq(presencas.atividadeId, atividadeId));
+      return all.filter(p => (p as any).atividadeId === atividadeId);
     }
-    return db.select().from(presencas);
+    return all;
   }
 
   async getPresenca(id: number): Promise<Presenca | undefined> {
-    const [presenca] = await db.select().from(presencas).where(eq(presencas.id, id));
+    const [presenca] = await db.select().from(presencas).where(eq(presencas.id, BigInt(id)));
     return presenca;
   }
 
@@ -552,13 +601,13 @@ export class DatabaseStorage implements IStorage {
     const [updated] = await db
       .update(presencas)
       .set(presenca as any)
-      .where(eq(presencas.id, id))
+  .where(eq(presencas.id, BigInt(id)))
       .returning();
     return updated as Presenca | undefined;
   }
 
   async deletePresenca(id: number): Promise<void> {
-    await db.delete(presencas).where(eq(presencas.id, id));
+    await db.delete(presencas).where(eq(presencas.id, BigInt(id)));
   }
 
   // Mensalidades operations
@@ -687,18 +736,18 @@ export class DatabaseStorage implements IStorage {
     const [dados] = await db
       .select()
       .from(dadosDesportivos)
-      .where(eq(dadosDesportivos.userId, userId));
+      .where(eq(dadosDesportivos.userId, Number(userId)));
     return dados;
   }
 
   async upsertDadosDesportivos(dados: z.infer<typeof insertDadosDesportivosSchema>): Promise<DadosDesportivos> {
-    const existing = await this.getDadosDesportivos(dados.userId);
+    const existing = await this.getDadosDesportivos(String(dados.userId));
     
     if (existing) {
       const [updated] = await db
         .update(dadosDesportivos)
         .set(dados as any)
-        .where(eq(dadosDesportivos.userId, dados.userId))
+        .where(eq(dadosDesportivos.userId, Number(dados.userId)))
         .returning();
       return updated;
     } else {
@@ -715,18 +764,18 @@ export class DatabaseStorage implements IStorage {
     const [dados] = await db
       .select()
       .from(dadosConfiguracao)
-      .where(eq(dadosConfiguracao.userId, userId));
+      .where(eq(dadosConfiguracao.userId, Number(userId)));
     return dados;
   }
 
   async upsertDadosConfiguracao(dados: z.infer<typeof insertDadosConfiguracaoSchema>): Promise<DadosConfiguracao> {
-    const existing = await this.getDadosConfiguracao(dados.userId);
+    const existing = await this.getDadosConfiguracao(String(dados.userId));
     
     if (existing) {
       const _updatedResult = await db
         .update(dadosConfiguracao)
         .set(dados as any)
-        .where(eq(dadosConfiguracao.userId, dados.userId))
+        .where(eq(dadosConfiguracao.userId, Number(dados.userId)))
         .returning();
       const updated = (_updatedResult as any)[0];
       return updated;
@@ -745,7 +794,7 @@ export class DatabaseStorage implements IStorage {
     return db
       .select()
       .from(treinos)
-      .where(eq(treinos.userId, userId))
+      .where(eq(treinos.userId, Number(userId)))
       .orderBy(treinos.data);
   }
 
@@ -760,7 +809,7 @@ export class DatabaseStorage implements IStorage {
     return db
       .select()
       .from(resultados)
-      .where(eq(resultados.userId, userId))
+      .where(eq(resultados.userId, Number(userId)))
       .orderBy(resultados.data);
   }
 

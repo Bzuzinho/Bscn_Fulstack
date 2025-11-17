@@ -220,18 +220,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Apply filters if provided
       if (req.query.tipo) {
-        atividades = atividades.filter(a => a.tipo === req.query.tipo);
+        atividades = atividades.filter(a => (a as any).tipo === req.query.tipo);
       }
       if (req.query.data) {
-        atividades = atividades.filter(a => a.data === req.query.data);
+        atividades = atividades.filter(a => (a as any).data === req.query.data);
       }
       
-      // Get all presencas to calculate participant counts
+      // Get all presencas to calculate participant counts. The current DB
+      // schema doesn't always include an explicit `atividadeId` on presencas,
+      // so compute a safe participant count based on the `presenca` flag.
       const allPresencas = await storage.getPresencas();
-      
-      // Add participant count to each activity
+
+      // Add participant count to each activity (best-effort using presenca)
       const atividadesWithCounts = atividades.map(atividade => {
-        const presencas = allPresencas.filter(p => p.atividadeId === atividade.id && p.presente);
+        const presencas = allPresencas.filter(p => (p as any).presenca === true);
         return {
           ...atividade,
           participantsCount: presencas.length
@@ -392,7 +394,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Apply filters if provided
       if (req.query.atividadeId) {
         const atividadeId = parseInt(req.query.atividadeId as string);
-        presencas = presencas.filter(p => p.atividadeId === atividadeId);
+        presencas = presencas.filter(p => (p as any).atividadeId === atividadeId);
       }
       if (req.query.pessoaId) {
         const pessoaId = parseInt(req.query.pessoaId as string);
@@ -522,7 +524,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Add pessoa details to each mensalidade
       const mensalidadesWithPessoa = mensalidades.map(mensalidade => {
-        const pessoa = pessoas.find(p => p.id === mensalidade.pessoaId);
+        // pessoas.id may be bigint while mensalidade.pessoaId is an integer;
+        // compare via string to avoid bigint/number mismatch.
+        const pessoa = pessoas.find(p => String(p.id) === String(mensalidade.pessoaId));
         return {
           ...mensalidade,
           pessoaNome: pessoa?.nome || 'Desconhecido',
@@ -1011,10 +1015,159 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Object Storage routes - Referenced from blueprint:javascript_object_storage
   // Get upload URL for profile image
+  // Debug endpoints (only enabled in development when DISABLE_REPLIT_AUTH=true)
+  if (process.env.DISABLE_REPLIT_AUTH === 'true') {
+    app.post("/api/debug/objects/upload", async (_req, res) => {
+      try {
+        const objectStorageService = new ObjectStorageService();
+        const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+        console.log("/api/debug/objects/upload -> uploadURL:", uploadURL);
+        res.json({ uploadURL });
+      } catch (error) {
+        console.error("Error getting debug upload URL:", error);
+        res.status(500).json({ message: "Failed to get upload URL (debug)" });
+      }
+    });
+
+    app.put("/api/debug/profile-images", async (req, res) => {
+      try {
+        const rawPath = req.body?.profileImageUrl;
+        if (!rawPath) return res.status(400).json({ error: "profileImageUrl is required" });
+        const objectStorageService = new ObjectStorageService();
+        const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(rawPath, {
+          owner: req.body?.owner || "debug",
+          visibility: "public",
+        });
+        console.log("/api/debug/profile-images -> objectPath:", objectPath);
+        res.json({ objectPath });
+      } catch (error) {
+        console.error("Error in debug profile-image path:", error);
+        res.status(500).json({ error: "Internal server error (debug)" });
+      }
+    });
+
+    // Dev helper: set a user's profileImageUrl directly in the DB (development only)
+    app.post('/api/debug/set-profile-image', async (req, res) => {
+      try {
+        const { userId, profileImageUrl } = req.body || {};
+        if (!userId || !profileImageUrl) return res.status(400).json({ error: 'userId and profileImageUrl are required' });
+        // Normalize local-upload fallback URLs to the public-serving path.
+        let finalUrl = profileImageUrl as string;
+        try {
+          // remove origin if present
+          const origin = process.env.SERVER_ORIGIN || `http://localhost:${process.env.PORT || 3000}`;
+          if (finalUrl.startsWith(origin)) {
+            finalUrl = finalUrl.slice(origin.length);
+          }
+        } catch (e) {
+          // ignore
+        }
+
+        // Convert `/local-uploads-upload/<id>` -> `/local-uploads/<id>`
+        finalUrl = finalUrl.replace('/local-uploads-upload/', '/local-uploads/').replace('/local-uploads-upload', '/local-uploads');
+
+        // Ensure we persist an absolute URL so clients can fetch it directly.
+        const serverOrigin = process.env.SERVER_ORIGIN || `http://localhost:${process.env.PORT || 3000}`;
+        const absoluteUrl = finalUrl.startsWith('/') ? `${serverOrigin}${finalUrl}` : finalUrl;
+
+        const updated = await storage.updateUser(String(userId), { profileImageUrl: absoluteUrl });
+        return res.json({ success: true, updated });
+      } catch (err) {
+        console.error('Error in debug set-profile-image:', err);
+        return res.status(500).json({ error: 'internal error' });
+      }
+    });
+  }
+
+  // Local dev upload receiver (accept PUT so local signed URLs can target this)
+  // This endpoint stores uploaded bytes under ./tmp/local-uploads/<id>
+  app.put('/local-uploads-upload/:id', async (req, res) => {
+    try {
+      const id = req.params.id;
+      console.log('local upload handler invoked for id=', id, 'headers=', {
+        length: req.headers['content-length'],
+        type: req.headers['content-type'],
+        origin: req.headers['origin'],
+      });
+      const fsPromises = await import('fs/promises');
+      const dirPath = `/tmp/local-uploads`;
+      await fsPromises.mkdir(dirPath, { recursive: true });
+      const filePath = `${dirPath}/${id}`;
+      const fs = await import('fs');
+      const writeStream = fs.createWriteStream(filePath);
+      // Pipe request into the file write stream and listen for finish/error on the stream
+      req.pipe(writeStream);
+      writeStream.on('finish', () => {
+        console.log('local upload finished for id=', id, 'savedTo=', filePath);
+        res.status(200).json({ path: `/local-uploads/${id}` });
+      });
+      writeStream.on('error', (err: any) => {
+        console.error('local upload stream error for id=', id, err);
+        try {
+          if (!res.headersSent) res.status(500).json({ error: 'upload failed' });
+        } catch (_) {}
+      });
+    } catch (error) {
+      console.error('Error handling local upload:', error);
+      res.status(500).json({ error: 'internal error' });
+    }
+  });
+
+  // Alias under /api so dev frontends can PUT to a relative /api URL (proxed by Vite)
+  app.put('/api/local-uploads-upload/:id', async (req, res) => {
+    try {
+      const id = req.params.id;
+      console.log('api local upload handler invoked for id=', id, 'headers=', {
+        length: req.headers['content-length'],
+        type: req.headers['content-type'],
+        origin: req.headers['origin'],
+      });
+      const fsPromises = await import('fs/promises');
+      const dirPath = `/tmp/local-uploads`;
+      await fsPromises.mkdir(dirPath, { recursive: true });
+      const filePath = `${dirPath}/${id}`;
+      const fs = await import('fs');
+      const writeStream = fs.createWriteStream(filePath);
+      req.pipe(writeStream);
+      writeStream.on('finish', () => {
+        console.log('api local upload finished for id=', id, 'savedTo=', filePath);
+        res.status(200).json({ path: `/local-uploads/${id}` });
+      });
+      writeStream.on('error', (err: any) => {
+        console.error('api local upload stream error for id=', id, err);
+        try {
+          if (!res.headersSent) res.status(500).json({ error: 'upload failed' });
+        } catch (_) {}
+      });
+    } catch (error) {
+      console.error('Error handling api local upload:', error);
+      res.status(500).json({ error: 'internal error' });
+    }
+  });
+
+  // Serve local uploaded files in development
+  app.get('/local-uploads/:id', async (req, res) => {
+    try {
+      const id = req.params.id;
+      const fsPromises = await import('fs/promises');
+      const filePath = `/tmp/local-uploads/${id}`;
+      try {
+        await fsPromises.access(filePath);
+      } catch (e) {
+        return res.sendStatus(404);
+      }
+      res.sendFile(filePath);
+    } catch (error) {
+      console.error('Error serving local upload:', error);
+      res.sendStatus(500);
+    }
+  });
+
   app.post("/api/objects/upload", isAuthenticated, async (req, res) => {
     try {
       const objectStorageService = new ObjectStorageService();
       const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+      console.log("/api/objects/upload -> uploadURL:", uploadURL);
       res.json({ uploadURL });
     } catch (error) {
       console.error("Error getting upload URL:", error);

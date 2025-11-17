@@ -9,6 +9,13 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
       '@assets': path.resolve(__dirname, '../attached_assets'),
       '@shared': path.resolve(__dirname, '../shared'),
+      // Force React and React DOM to the client package versions to avoid
+      // duplicate/react-mismatch issues when the monorepo root also lists
+      // React. This ensures hooks like `useState` are the expected functions
+      // at runtime and prevents "Cannot read properties of null (reading
+      // 'useState')" errors that arise from loading a different React build.
+      react: path.resolve(__dirname, 'node_modules/react'),
+      'react-dom': path.resolve(__dirname, 'node_modules/react-dom'),
     },
   },
   server: {

@@ -1,6 +1,6 @@
 {
   "include": ["server/**/*", "shared/**/*", "types/**/*"],
-  "exclude": ["node_modules", "build", "dist", "**/*.test.ts"],
+  "exclude": ["node_modules", "build", "dist", "**/*.test.ts", "drizzle_db_introspect", "shared/schema_legacy.ts", "shared/schema.ts"],
   "compilerOptions": {
     "target": "ES2020",
     "incremental": true,
@@ -18,10 +18,10 @@
     "outDir": "dist",
     "baseUrl": ".",
     "types": ["node", "vite/client"],
-    "paths": {
+      "paths": {
       "@/*": ["./client/src/*"],
       "@shared/*": ["./shared/*"],
-      "@shared/schema": ["./shared/schema.ts"]
+      "@shared/schema": ["./shared/schema_bridge.ts"]
     }
   }
 }
