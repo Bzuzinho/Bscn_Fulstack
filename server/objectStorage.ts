@@ -133,26 +133,39 @@ export class ObjectStorageService {
 
   // Gets the upload URL for an object entity.
   async getObjectEntityUploadURL(): Promise<string> {
-    const privateObjectDir = this.getPrivateObjectDir();
-    if (!privateObjectDir) {
-      throw new Error(
-        "PRIVATE_OBJECT_DIR not set. Create a bucket in 'Object Storage' " +
-          "tool and set PRIVATE_OBJECT_DIR env var."
+    try {
+      const privateObjectDir = this.getPrivateObjectDir();
+      const objectId = randomUUID();
+      const fullPath = `${privateObjectDir}/uploads/${objectId}`;
+
+      const { bucketName, objectName } = parseObjectPath(fullPath);
+
+      console.log(
+        "objectStorage.getObjectEntityUploadURL -> fullPath:",
+        fullPath,
+        "bucket:",
+        bucketName,
+        "object:",
+        objectName
       );
+
+      // Sign URL for PUT method with TTL
+      return await signObjectURL({
+        bucketName,
+        objectName,
+        method: "PUT",
+        ttlSec: 900,
+      });
+    } catch (err) {
+      // Development fallback: when PRIVATE_OBJECT_DIR is not set or signing fails
+      // (for example, no sidecar available), return a relative API PUT URL so the
+      // frontend can upload via the current origin (and Vite's /api proxy).
+      console.warn("objectStorage.getObjectEntityUploadURL - using local fallback:", err?.message ?? err);
+      const localId = randomUUID();
+      // Return a relative path under /api so dev frontends (served from a proxy)
+      // will send the request to the backend (e.g. Vite proxy /api -> backend).
+      return `/api/local-uploads-upload/${localId}`;
     }
-
-    const objectId = randomUUID();
-    const fullPath = `${privateObjectDir}/uploads/${objectId}`;
-
-    const { bucketName, objectName } = parseObjectPath(fullPath);
-
-    // Sign URL for PUT method with TTL
-    return signObjectURL({
-      bucketName,
-      objectName,
-      method: "PUT",
-      ttlSec: 900,
-    });
   }
 
   // Gets the object entity file from the object path.
@@ -183,30 +196,63 @@ export class ObjectStorageService {
   }
 
   normalizeObjectEntityPath(rawPath: string): string {
-    if (!rawPath.startsWith("https://storage.googleapis.com/")) {
-      return rawPath;
-    }
-  
-    // Extract the path from the URL by removing query parameters and domain
+    // If it's an absolute URL (http(s)://...), extract the pathname so that
+    // local fallback URLs like `http://localhost:3000/local-uploads-upload/...`
+    // are normalized to their path component before further processing.
     let rawObjectPath: string;
-    try {
-      const url = new URL(rawPath);
-      rawObjectPath = url.pathname;
-    } catch (e: any) {
-      // If the URL constructor fails, log and return the raw path unchanged.
-      console.error("normalizeObjectEntityPath: failed to parse URL", rawPath, e?.message ?? e);
-      return rawPath;
+    if (rawPath.startsWith('http://') || rawPath.startsWith('https://')) {
+      try {
+        const url = new URL(rawPath);
+        rawObjectPath = url.pathname;
+      } catch (e: any) {
+        console.error('normalizeObjectEntityPath: failed to parse URL', rawPath, e?.message ?? e);
+        return rawPath;
+      }
+    } else {
+      rawObjectPath = rawPath;
     }
-  
-    let objectEntityDir = this.getPrivateObjectDir();
-    if (!objectEntityDir.endsWith("/")) {
-      objectEntityDir = `${objectEntityDir}/`;
-    }
-  
-    if (!rawObjectPath.startsWith(objectEntityDir)) {
+
+    // If this is a local-dev uploaded file path (the local PUT fallback),
+    // normalize immediately and avoid calling `getPrivateObjectDir()` which
+    // requires production config. Also accept the proxied `/api/...` variants
+    // that the frontend may receive when using Vite's `/api` proxy in dev.
+    if (
+      rawObjectPath.startsWith('/local-uploads') ||
+      rawObjectPath.startsWith('/local-uploads-upload') ||
+      rawObjectPath.startsWith('/api/local-uploads') ||
+      rawObjectPath.startsWith('/api/local-uploads-upload')
+    ) {
+      // Convert API-prefixed paths to the public-serving path where appropriate
+      if (rawObjectPath.startsWith('/api/local-uploads-upload')) {
+        return rawObjectPath.replace('/api/local-uploads-upload/', '/local-uploads/').replace('/api/local-uploads-upload', '/local-uploads');
+      }
+      if (rawObjectPath.startsWith('/api/local-uploads')) {
+        return rawObjectPath.replace('/api/local-uploads/', '/local-uploads/').replace('/api/local-uploads', '/local-uploads');
+      }
+
       return rawObjectPath;
     }
   
+    // If we get here we need to consult the private object dir. Be defensive
+    // because in development `PRIVATE_OBJECT_DIR` may be missing and the
+    // original implementation threw an exception. If that happens, return
+    // the raw object path to allow callers to handle local fallbacks.
+    let objectEntityDir = "";
+    try {
+      objectEntityDir = this.getPrivateObjectDir();
+    } catch (err) {
+      console.warn("normalizeObjectEntityPath: PRIVATE_OBJECT_DIR not set, treating as local path", err?.message ?? err);
+      return rawObjectPath;
+    }
+
+    if (!objectEntityDir.endsWith("/")) {
+      objectEntityDir = `${objectEntityDir}/`;
+    }
+
+    if (!rawObjectPath.startsWith(objectEntityDir)) {
+      return rawObjectPath;
+    }
+
     // Extract the entity ID from the path
     const entityId = rawObjectPath.slice(objectEntityDir.length);
     return `/objects/${entityId}`;
@@ -217,7 +263,45 @@ export class ObjectStorageService {
     rawPath: string,
     aclPolicy: ObjectAclPolicy
   ): Promise<string> {
-    const normalizedPath = this.normalizeObjectEntityPath(rawPath);
+    let normalizedPath: string;
+    try {
+      normalizedPath = this.normalizeObjectEntityPath(rawPath);
+    } catch (err) {
+      console.warn("trySetObjectEntityAclPolicy: normalize failed, attempting local fallback", err?.message ?? err);
+      // If normalization failed but the raw path looks like a local-upload path,
+      // synthesize the public-serving path and return it.
+      if (typeof rawPath === "string" && (rawPath.includes("local-uploads") || rawPath.includes("local-uploads-upload"))) {
+        const publicPath = rawPath
+          .toString()
+          .replace(/https?:\/\/[^/]+/, "")
+          .replace(/\/api\/local-uploads-upload\//, "/local-uploads/")
+          .replace(/\/api\/local-uploads\//, "/local-uploads/")
+          .replace(/\/local-uploads-upload\//, "/local-uploads/")
+          .replace(/\/local-uploads-upload/, "/local-uploads");
+        return publicPath;
+      }
+      throw err;
+    }
+    // Development/local upload fallback: if the path is a local-uploads path
+    // (produced by the local PUT fallback), we don't have an object in GCS
+    // to set ACLs on. Accept the local path and return a public-serving
+    // path instead of attempting to access remote object storage.
+    if (
+      normalizedPath.startsWith("/local-uploads") ||
+      normalizedPath.startsWith("/local-uploads-upload") ||
+      normalizedPath.startsWith("/api/local-uploads") ||
+      normalizedPath.startsWith("/api/local-uploads-upload")
+    ) {
+      // Normalize path so clients use `/local-uploads/<id>` as the final
+      // publicly-served path. Also accept `/api/...` prefixes.
+      const publicPath = normalizedPath
+        .replace("/api/local-uploads-upload/", "/local-uploads/")
+        .replace("/api/local-uploads/", "/local-uploads/")
+        .replace("/local-uploads-upload/", "/local-uploads/")
+        .replace("/local-uploads-upload", "/local-uploads");
+      return publicPath;
+    }
+
     if (!normalizedPath.startsWith("/")) {
       return normalizedPath;
     }
@@ -283,23 +367,25 @@ async function signObjectURL({
     method,
     expires_at: new Date(Date.now() + ttlSec * 1000).toISOString(),
   };
-  const response = await fetch(
-    `${REPLIT_SIDECAR_ENDPOINT}/object-storage/signed-object-url`,
-    {
+  try {
+    const response = await fetch(`${REPLIT_SIDECAR_ENDPOINT}/object-storage/signed-object-url`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(request),
+    });
+    if (!response.ok) {
+      const bodyText = await response.text().catch(() => "<no-body>");
+      console.error("signObjectURL: sidecar responded with status", response.status, bodyText);
+      throw new Error(`Failed to sign object URL, errorcode: ${response.status}`);
     }
-  );
-  if (!response.ok) {
-    throw new Error(
-      `Failed to sign object URL, errorcode: ${response.status}, ` +
-        `make sure you're running on Replit`
-    );
-  }
 
-  const { signed_url: signedURL } = await response.json();
-  return signedURL;
+    const { signed_url: signedURL } = await response.json();
+    console.log("signObjectURL -> signedURL:", signedURL);
+    return signedURL;
+  } catch (err) {
+    console.error("signObjectURL error:", err);
+    throw err;
+  }
 }
