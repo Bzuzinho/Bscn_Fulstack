@@ -514,7 +514,7 @@ function DadosPessoaisTab({ user, escaloes, currentUser }: { user: User; escaloe
       await apiRequest("PUT", `/api/pessoas/${user.id}`, mapped);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/pessoas", user.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pessoas", id] });
       queryClient.invalidateQueries({ queryKey: ["/api/pessoas"] });
       toast({
         title: "Dados atualizados",
@@ -535,7 +535,7 @@ function DadosPessoaisTab({ user, escaloes, currentUser }: { user: User; escaloe
       await apiRequest("PUT", "/api/profile-images", { profileImageUrl });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/pessoas", user.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pessoas", id] });
       queryClient.invalidateQueries({ queryKey: ["/api/pessoas"] });
       toast({
         title: "Foto atualizada",
