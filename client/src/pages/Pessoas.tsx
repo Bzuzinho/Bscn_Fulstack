@@ -21,7 +21,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 // (shared schema imports cause runtime/type mismatches in the browser dev overlay).
 type PessoaLocal = {
   id: number;
-  nome: string;
+  firstName?: string;
+  lastName?: string;
+  nome: string; // Computed field for backwards compatibility
   email?: string | null;
   telemovel?: string | null;
   dataNascimento?: string | null;
@@ -30,6 +32,7 @@ type PessoaLocal = {
   cp?: string | null;
   localidade?: string | null;
   sexo?: string | null;
+  escalaoId?: number | null;
 };
 
 type EscalaoLocal = { id: number; nome: string };
