@@ -187,7 +187,7 @@ export async function setupAuth(app: Express) {
       }
 
       // find user in DB
-      const q = await pool.query('SELECT id, email, name, password, role FROM users WHERE email = $1 LIMIT 1', [email]);
+      const q = await pool.query('SELECT id, email, first_name, last_name, password, role FROM users WHERE email = $1 LIMIT 1', [email]);
       const row = q.rows[0];
       if (!row) {
         return res.status(401).json({ message: 'Invalid credentials' });
@@ -204,7 +204,13 @@ export async function setupAuth(app: Express) {
       // Include role and basic profile info in the session claims so
       // server- and client-side permission checks can rely on the session.
       const sessionUser: any = {
-        claims: { sub: row.id, email: row.email, name: row.name, role: row.role || 'membro' },
+        claims: { 
+          sub: row.id, 
+          email: row.email, 
+          first_name: row.first_name,
+          last_name: row.last_name,
+          role: row.role || 'membro' 
+        },
         access_token: null,
         refresh_token: null,
         expires_at: now + 60 * 60 * 24, // 1 day

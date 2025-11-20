@@ -6,7 +6,12 @@ export function mapPessoaServerToClient(p: any) {
     ...p,
     id: p.id,
     // Users table (Drizzle camelCase) vs legacy pessoas table (snake_case from raw queries)
-    name: p.name ?? p.nome ?? "",
+    firstName: p.firstName ?? p.first_name ?? "",
+    lastName: p.lastName ?? p.last_name ?? "",
+    // Support legacy nome field for backwards compatibility
+    nome: p.nome ?? ((p.firstName || p.first_name) && (p.lastName || p.last_name) 
+      ? `${p.firstName ?? p.first_name} ${p.lastName ?? p.last_name}` 
+      : ""),
     numeroSocio: p.numeroSocio ?? p.numero_socio ?? null,
     nif: p.nif ?? null,
     cartaoCidadao: p.cartaoCidadao ?? p.cartao_cidadao ?? null,
@@ -38,7 +43,8 @@ export function mapPessoaClientToServer(data: any) {
   if (!data) return data;
   // Map to users table schema - Drizzle expects camelCase property names
   return {
-    name: data.name ?? data.nome,
+    firstName: data.firstName ?? data.first_name ?? null,
+    lastName: data.lastName ?? data.last_name ?? null,
     email: data.email ?? null,
     emailSecundario: data.emailSecundario ?? data.email_secundario ?? null,
     contacto: data.contacto ?? data.telemovel ?? null,

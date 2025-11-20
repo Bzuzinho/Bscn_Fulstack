@@ -35,7 +35,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // fallback: try a simple raw query selecting common columns
       try {
-        const q = await pool.query('SELECT id, email, name FROM users WHERE id = $1 LIMIT 1', [userId]);
+        const q = await pool.query('SELECT id, email, first_name as "firstName", last_name as "lastName", profile_image_url as "profileImageUrl" FROM users WHERE id = $1 LIMIT 1', [userId]);
         const row = q.rows[0];
         if (row) return res.json(row);
       } catch (err) {
