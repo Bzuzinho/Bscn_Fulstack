@@ -11,7 +11,7 @@ interface ObjectUploaderProps {
   maxNumberOfFiles?: number;
   maxFileSize?: number;
   onGetUploadParameters: () => Promise<{
-    method: "PUT";
+    method: "PUT" | "POST";
     url: string;
   }>;
   onComplete?: (
@@ -19,6 +19,7 @@ interface ObjectUploaderProps {
   ) => void;
   buttonClassName?: string;
   children: ReactNode;
+  userId?: string | number; // User ID for permission check
 }
 
 export function ObjectUploader({
@@ -28,6 +29,7 @@ export function ObjectUploader({
   onComplete,
   buttonClassName,
   children,
+  userId,
 }: ObjectUploaderProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -47,40 +49,80 @@ export function ObjectUploader({
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       try {
-        const params = await onGetUploadParameters();
-        const uploadUrl = params.url;
-        const method = params.method ?? "PUT";
-
-        const res = await fetch(uploadUrl, {
-          method,
-          body: file,
-          credentials: "include",
-          headers: {
-            "Content-Type": file.type || "application/octet-stream",
-          },
+        // Convert file to base64 for direct database storage
+        const base64Data = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Failed to read file"));
+          reader.readAsDataURL(file);
         });
 
-        if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
-
-        let finalPath = uploadUrl;
-        try {
-          const body = await res.json();
-          finalPath = (body && (body.path || body.objectPath || body.url)) || uploadUrl;
-        } catch (e) {
-          finalPath = uploadUrl;
+        // Validate file size (default 10MB)
+        if (file.size > maxFileSize) {
+          throw new Error(`File size (${(file.size / 1024 / 1024).toFixed(2)}MB) exceeds maximum allowed size (${(maxFileSize / 1024 / 1024).toFixed(2)}MB)`);
         }
 
-        try {
-          if (typeof finalPath === "string" && finalPath.startsWith("/")) {
-            finalPath = `${window.location.origin}${finalPath}`;
+        // Validate file type (images and common documents)
+        const allowedTypes = [
+          'image/', 
+          'application/pdf',
+          'application/msword',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          'application/vnd.ms-excel',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ];
+        
+        const isAllowed = allowedTypes.some(type => file.type.startsWith(type) || file.type === type);
+        if (!isAllowed) {
+          throw new Error('File type not allowed. Allowed: images, PDF, Word, Excel');
+        }
+
+        // Get upload parameters (this will now return the direct upload endpoint)
+        const params = await onGetUploadParameters();
+        const uploadUrl = params.url;
+
+        // Upload as JSON with base64 data
+        const res = await fetch(uploadUrl, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            imageData: base64Data,
+            userId: userId,
+          }),
+        });
+
+        if (!res.ok) {
+          // Provide more detailed error information for debugging
+          let errorMsg = `Upload failed with status ${res.status}`;
+          if (res.status === 400) {
+            const body = await res.json().catch(() => ({}));
+            errorMsg = `Upload failed: ${body.error || 'Invalid request'}`;
+          } else if (res.status === 403) {
+            errorMsg = "Upload failed: Access denied. Check permissions.";
+          } else if (res.status === 404) {
+            errorMsg = "Upload failed: Endpoint not found.";
+          } else if (res.status === 413) {
+            errorMsg = "Upload failed: File too large.";
           }
-        } catch (e) {
-          // ignore
+          throw new Error(errorMsg);
         }
 
-        successful.push({ id: file.name, name: file.name, size: file.size, uploadURL: finalPath });
+        const responseData = await res.json();
+        const finalPath = responseData.profileImageUrl || base64Data;
+
+        successful.push({ 
+          id: file.name, 
+          name: file.name, 
+          size: file.size, 
+          uploadURL: finalPath 
+        });
       } catch (err) {
-        failed.push({ id: file.name, error: String(err) });
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        console.error("Upload error:", errorMessage, err);
+        failed.push({ id: file.name, error: errorMessage });
       }
     }
 

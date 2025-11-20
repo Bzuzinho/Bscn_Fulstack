@@ -439,64 +439,33 @@ function DadosPessoaisTab({ user, escaloes, currentUser }: { user: User; escaloe
     },
   });
 
-  const uploadProfileImageMutation = useMutation({
-    mutationFn: async (profileImageUrl: string) => {
-      await apiRequest("PUT", "/api/profile-images", { 
-        profileImageUrl,
-        userId: user.id 
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/pessoas", user.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/pessoas"] });
-      toast({
-        title: "Foto atualizada",
-        description: "Foto de perfil atualizada com sucesso.",
-      });
-    },
-    onError: () => {
-      toast({
-        title: "Erro",
-        description: "Falha ao atualizar foto de perfil.",
-        variant: "destructive",
-      });
-    },
-  });
-
   const handleGetUploadParameters = async () => {
-    const response = await fetch("/api/objects/upload", {
-      method: "POST",
-      credentials: "include",
-    });
-    if (!response.ok) throw new Error("Failed to get upload URL");
-    const { uploadURL } = await response.json();
-    if (!uploadURL || typeof uploadURL !== "string") {
-      throw new Error("Invalid upload URL returned from server");
-    }
-
-    // Ensure we return an absolute URL. If the server returned a relative
-    // path (e.g. `/objects/...`) convert it to an absolute URL using the
-    // current origin. The URL constructor will throw for truly invalid URLs,
-    // so catch that and rethrow a clearer error for Uppy to show.
-    let finalUrl: string;
-    try {
-      finalUrl = new URL(uploadURL, window.location.origin).toString();
-    } catch (e) {
-      throw new Error(`Invalid upload URL: ${String(uploadURL)}`);
-    }
-
+    // Return the direct upload endpoint for database storage
     return {
-      method: "PUT" as const,
-      url: finalUrl,
+      method: "POST" as const,
+      url: "/api/profile-images/upload",
     };
   };
 
   const handleUploadComplete = (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
     if (result.successful && result.successful.length > 0) {
-      const uploadedUrl = result.successful[0].uploadURL;
-      if (uploadedUrl) {
-        uploadProfileImageMutation.mutate(uploadedUrl);
-      }
+      // Image was uploaded successfully to database
+      // Invalidate queries to refresh the UI with new image
+      queryClient.invalidateQueries({ queryKey: ["/api/pessoas", user.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/pessoas"] });
+      
+      toast({
+        title: "Foto atualizada",
+        description: "Foto de perfil atualizada com sucesso.",
+      });
+    } else if (result.failed && result.failed.length > 0) {
+      // Show detailed error message to user
+      const error = result.failed[0].error || "Unknown error";
+      toast({
+        title: "Erro no Upload",
+        description: String(error),
+        variant: "destructive",
+      });
     }
   };
 
@@ -522,6 +491,7 @@ function DadosPessoaisTab({ user, escaloes, currentUser }: { user: User; escaloe
                   maxFileSize={5242880}
                   onGetUploadParameters={handleGetUploadParameters}
                   onComplete={handleUploadComplete}
+                  userId={user.id}
                 >
                   <Upload className="h-4 w-4 mr-2" />
                   Carregar Foto
@@ -1177,22 +1147,8 @@ function DadosDesportivosTab({
                             maxNumberOfFiles={1}
                             maxFileSize={5242880}
                             onGetUploadParameters={async () => {
-                              const response = await fetch("/api/objects/upload", {
-                                method: "POST",
-                                credentials: "include",
-                              });
-                              if (!response.ok) throw new Error("Failed to get upload URL");
-                              const { uploadURL } = await response.json();
-                              if (!uploadURL || typeof uploadURL !== "string") {
-                                throw new Error("Invalid upload URL returned from server");
-                              }
-                              let finalUrl: string;
-                              try {
-                                finalUrl = new URL(uploadURL, window.location.origin).toString();
-                              } catch (e) {
-                                throw new Error(`Invalid upload URL: ${String(uploadURL)}`);
-                              }
-                              return { method: "PUT" as const, url: finalUrl };
+                              // Use direct upload endpoint for documents too
+                              return { method: "POST" as const, url: "/api/profile-images/upload" };
                             }}
                             onComplete={(result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
                               if (result.successful && result.successful.length > 0) {
@@ -1201,8 +1157,15 @@ function DadosDesportivosTab({
                                   form.setValue("arquivoInscricao", uploadedUrl);
                                   toast({ title: "Upload concluído", description: "Arquivo de inscrição carregado." });
                                 }
+                              } else if (result.failed && result.failed.length > 0) {
+                                toast({ 
+                                  title: "Erro no Upload", 
+                                  description: result.failed[0].error || "Falha ao carregar arquivo",
+                                  variant: "destructive" 
+                                });
                               }
                             }}
+                            userId={userId}
                           >
                             <Upload className="h-4 w-4 mr-2" />
                             Carregar

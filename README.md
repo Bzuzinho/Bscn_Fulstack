@@ -154,6 +154,25 @@ Ambos os servidores suportam **hot reload**:
 - PHP 8.3
 - SQLite
 
+## Armazenamento de Imagens
+
+Este sistema armazena imagens de perfil **diretamente na base de dados** (como base64), eliminando a necessidade de configurar buckets S3/GCS externos e problemas de CORS.
+
+**📖 Como Funciona**: [docs/DATABASE_IMAGE_STORAGE.md](docs/DATABASE_IMAGE_STORAGE.md) - Guia completo sobre upload e armazenamento de imagens
+
+### Características
+- ✅ Upload direto para base de dados (sem S3/GCS)
+- ✅ Sem configuração de CORS necessária
+- ✅ Suporta imagens (PNG, JPG, GIF, WebP) e documentos (PDF, Word, Excel)
+- ✅ Limite de 5MB por ficheiro
+- ✅ Conversão automática para base64
+- ✅ Validação de permissões server-side
+
+### Referência Histórica
+Documentação sobre CORS para storage externo (caso necessário no futuro):
+- [docs/S3_CORS_SETUP.md](docs/S3_CORS_SETUP.md) - Configuração de CORS para S3/GCS
+- [docs/QUICK_FIX_CORS.md](docs/QUICK_FIX_CORS.md) - Correção rápida de CORS
+
 ## Troubleshooting
 
 ### Página em Branco (Importante!)
