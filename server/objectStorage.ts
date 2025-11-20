@@ -132,6 +132,9 @@ export class ObjectStorageService {
   }
 
   // Gets the upload URL for an object entity.
+  // IMPORTANT: The storage bucket MUST have proper CORS configuration to allow
+  // browser uploads. Required headers: ETag, Content-Type, Content-Length.
+  // See docs/S3_CORS_SETUP.md for detailed configuration instructions.
   async getObjectEntityUploadURL(): Promise<string> {
     try {
       const privateObjectDir = this.getPrivateObjectDir();

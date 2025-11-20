@@ -497,6 +497,22 @@ function DadosPessoaisTab({ user, escaloes, currentUser }: { user: User; escaloe
       if (uploadedUrl) {
         uploadProfileImageMutation.mutate(uploadedUrl);
       }
+    } else if (result.failed && result.failed.length > 0) {
+      // Show detailed error message to user
+      const error = result.failed[0].error || "Unknown error";
+      toast({
+        title: "Erro no Upload",
+        description: String(error),
+        variant: "destructive",
+      });
+      
+      // If it's a CORS error, provide additional guidance
+      if (String(error).toLowerCase().includes("cors")) {
+        console.error(
+          "CORS Configuration Issue: The storage bucket needs proper CORS configuration. " +
+          "Please refer to docs/S3_CORS_SETUP.md for setup instructions."
+        );
+      }
     }
   };
 

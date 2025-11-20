@@ -60,7 +60,18 @@ export function ObjectUploader({
           },
         });
 
-        if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+        if (!res.ok) {
+          // Provide more detailed error information for debugging
+          let errorMsg = `Upload failed with status ${res.status}`;
+          if (res.status === 0 || res.type === 'opaque') {
+            errorMsg = "Upload failed: CORS error. The storage bucket may not be configured correctly. Please check the CORS configuration.";
+          } else if (res.status === 403) {
+            errorMsg = "Upload failed: Access denied. Check bucket permissions.";
+          } else if (res.status === 404) {
+            errorMsg = "Upload failed: Storage endpoint not found.";
+          }
+          throw new Error(errorMsg);
+        }
 
         let finalPath = uploadUrl;
         try {
@@ -80,7 +91,9 @@ export function ObjectUploader({
 
         successful.push({ id: file.name, name: file.name, size: file.size, uploadURL: finalPath });
       } catch (err) {
-        failed.push({ id: file.name, error: String(err) });
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        console.error("Upload error:", errorMessage, err);
+        failed.push({ id: file.name, error: errorMessage });
       }
     }
 

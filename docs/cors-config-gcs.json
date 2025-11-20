@@ -1,0 +1,14 @@
+[
+  {
+    "origin": ["*"],
+    "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
+    "responseHeader": [
+      "Content-Type",
+      "Content-Length",
+      "ETag",
+      "x-goog-acl",
+      "x-goog-meta-*"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]
