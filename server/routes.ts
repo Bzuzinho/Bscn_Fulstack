@@ -107,12 +107,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Pessoas routes
   app.get('/api/pessoas', isAuthenticated, async (req, res) => {
     try {
-      let pessoas = await storage.getPessoas();
+      // Use users table instead of pessoas table
+      const filters: any = {};
+      if (req.query.escalaoId) filters.escalaoId = parseInt(req.query.escalaoId as string);
+      if (req.query.estado) filters.estado = req.query.estado;
       
-      // (legacy filters removed) If you need filtering by type or escalao
-      // reintroduce here after adding the appropriate columns to the `pessoas` table.
-      
-      res.json(pessoas);
+      const users = await storage.getUsers(filters);
+      res.json(users);
     } catch (error) {
       console.error("Error fetching pessoas:", error);
       res.status(500).json({ message: "Failed to fetch pessoas" });
@@ -121,12 +122,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get('/api/pessoas/:id', isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      const pessoa = await storage.getPessoa(id);
-      if (!pessoa) {
+      // Use users table instead of pessoas table
+      const user = await storage.getUser(req.params.id);
+      if (!user) {
         return res.status(404).json({ message: "Pessoa not found" });
       }
-      res.json(pessoa);
+      res.json(user);
     } catch (error) {
       console.error("Error fetching pessoa:", error);
       res.status(500).json({ message: "Failed to fetch pessoa" });
@@ -135,25 +136,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/pessoas', isAuthenticated, async (req, res) => {
     try {
-      // Accept both legacy `pessoa` shape and the user-form shape used by the UI.
-      const body = req.body ?? {};
-
-      // Map UI/user fields to the `pessoas` table column names (telemovel, cp, data_nascimento)
-      const mapped = {
-        nome: body.name || body.nome,
-        email: body.email || null,
-        telemovel: body.contacto || body.telemovel || null,
-        data_nascimento: body.dataNascimento || body.data_nascimento || null,
-        nif: body.nif || null,
-        morada: body.morada || null,
-        cp: body.codigoPostal || body.cp || null,
-        localidade: body.localidade || null,
-        sexo: body.sexo || null,
-      } as any;
-
-      const validated = insertPessoaSchema.parse(mapped);
-      const pessoa = await storage.createPessoa(validated);
-      res.status(201).json(pessoa);
+      // Use users table - convert empty strings to null for optional fields
+      const sanitized = {
+        ...req.body,
+        dataNascimento: req.body.dataNascimento === "" ? null : req.body.dataNascimento,
+        email: req.body.email === "" ? null : req.body.email,
+        contacto: req.body.contacto === "" ? null : req.body.contacto,
+        nif: req.body.nif === "" ? null : req.body.nif,
+        morada: req.body.morada === "" ? null : req.body.morada,
+        codigoPostal: req.body.codigoPostal === "" ? null : req.body.codigoPostal,
+        localidade: req.body.localidade === "" ? null : req.body.localidade,
+        numeroSocio: req.body.numeroSocio === "" ? null : req.body.numeroSocio,
+        observacoesConfig: req.body.observacoesConfig === "" ? null : req.body.observacoesConfig,
+      };
+      const validated = upsertUserSchema.parse(sanitized);
+      const user = await storage.upsertUser(validated);
+      res.status(201).json(user);
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ message: "Invalid data", errors: error.errors });
@@ -165,43 +163,141 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put('/api/pessoas/:id', isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      // Permission check: only admin, the pessoa itself, or its encarregado may update
-  const sessionUserId = (req.user as any)?.claims?.sub || (req.user as any)?.id;
-  const existingPessoa = await storage.getPessoa(id);
-      if (!existingPessoa) return res.status(404).json({ message: "Pessoa not found" });
+      // Use users table - Permission check: only admin, the user itself, or its encarregado may update
+      const sessionUserId = (req.user as any)?.claims?.sub || (req.user as any)?.id;
+      const existingUser = await storage.getUser(req.params.id);
+      if (!existingUser) return res.status(404).json({ message: "Pessoa not found" });
 
-  const isAdmin = ((req.user as any)?.claims?.role || "").toString().toLowerCase() === "admin";
-  const isSelf = String(sessionUserId) === String((existingPessoa as any).userId ?? (existingPessoa as any).id);
-  const isEncarregado = String(sessionUserId) === String((existingPessoa as any).encarregado_id ?? (existingPessoa as any).encarregadoId ?? "");
+      const isAdmin = ((req.user as any)?.claims?.role || "").toString().toLowerCase() === "admin";
+      const isSelf = String(sessionUserId) === String(existingUser.id);
+      const isEncarregado = String(sessionUserId) === String(existingUser.encarregadoId ?? "");
 
       if (!isAdmin && !isSelf && !isEncarregado) {
         return res.status(403).json({ message: 'Forbidden' });
       }
 
-      const validated = insertPessoaSchema.partial().parse(req.body);
-      const pessoa = await storage.updatePessoa(id, validated);
-      if (!pessoa) {
+      // Convert empty strings to null for optional fields
+      const sanitized = {
+        ...req.body,
+        dataNascimento: req.body.dataNascimento === "" ? null : req.body.dataNascimento,
+        email: req.body.email === "" ? null : req.body.email,
+        contacto: req.body.contacto === "" ? null : req.body.contacto,
+        nif: req.body.nif === "" ? null : req.body.nif,
+        morada: req.body.morada === "" ? null : req.body.morada,
+        codigoPostal: req.body.codigoPostal === "" ? null : req.body.codigoPostal,
+        localidade: req.body.localidade === "" ? null : req.body.localidade,
+        numeroSocio: req.body.numeroSocio === "" ? null : req.body.numeroSocio,
+        observacoesConfig: req.body.observacoesConfig === "" ? null : req.body.observacoesConfig,
+      };
+      const validated = upsertUserSchema.partial().parse(sanitized);
+      const user = await storage.updateUser(req.params.id, validated);
+      if (!user) {
         return res.status(404).json({ message: "Pessoa not found" });
       }
-      res.json(pessoa);
+      res.json(user);
     } catch (error) {
       if (error instanceof z.ZodError) {
+        console.error("Validation error updating pessoa:", JSON.stringify(error.errors, null, 2));
         return res.status(400).json({ message: "Invalid data", errors: error.errors });
       }
       console.error("Error updating pessoa:", error);
-      res.status(500).json({ message: "Failed to update pessoa" });
+      console.error("Request body:", JSON.stringify(req.body, null, 2));
+      res.status(500).json({ 
+        message: "Failed to update pessoa",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
   app.delete('/api/pessoas/:id', isAuthenticated, async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      await storage.deletePessoa(id);
+      // Use users table instead of pessoas table
+      await storage.deleteUser(req.params.id);
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting pessoa:", error);
       res.status(500).json({ message: "Failed to delete pessoa" });
+    }
+  });
+
+  // Dados Desportivos routes (alias for /api/users/:id/dados-desportivos)
+  app.get('/api/pessoas/:id/dados-desportivos', isAuthenticated, async (req, res) => {
+    try {
+      const dados = await storage.getDadosDesportivos(req.params.id);
+      res.json(dados || {});
+    } catch (error) {
+      console.error("Error fetching dados desportivos:", error);
+      res.status(500).json({ message: "Failed to fetch dados desportivos" });
+    }
+  });
+
+  app.put('/api/pessoas/:id/dados-desportivos', isAuthenticated, async (req, res) => {
+    try {
+      const dados = await storage.upsertDadosDesportivos({
+        ...req.body,
+        userId: req.params.id,
+      });
+      res.json(dados);
+    } catch (error) {
+      console.error("Error updating dados desportivos:", error);
+      res.status(500).json({ message: "Failed to update dados desportivos" });
+    }
+  });
+
+  // Dados Configuracao routes (alias for /api/users/:id/dados-configuracao)
+  app.get('/api/pessoas/:id/dados-configuracao', isAuthenticated, async (req, res) => {
+    try {
+      const dados = await storage.getDadosConfiguracao(req.params.id);
+      res.json(dados || {});
+    } catch (error) {
+      console.error("Error fetching dados configuracao:", error);
+      res.status(500).json({ message: "Failed to fetch dados configuracao" });
+    }
+  });
+
+  app.put('/api/pessoas/:id/dados-configuracao', isAuthenticated, async (req, res) => {
+    try {
+      const dados = await storage.upsertDadosConfiguracao({
+        ...req.body,
+        userId: req.params.id,
+      });
+      res.json(dados);
+    } catch (error) {
+      console.error("Error updating dados configuracao:", error);
+      res.status(500).json({ message: "Failed to update dados configuracao" });
+    }
+  });
+
+  // Treinos routes (alias for /api/users/:id/treinos)
+  app.get('/api/pessoas/:id/treinos', isAuthenticated, async (req, res) => {
+    try {
+      const treinos = await storage.getTreinos(req.params.id);
+      res.json(treinos);
+    } catch (error) {
+      console.error("Error fetching treinos:", error);
+      res.status(500).json({ message: "Failed to fetch treinos" });
+    }
+  });
+
+  // Resultados routes (alias for /api/users/:id/resultados)
+  app.get('/api/pessoas/:id/resultados', isAuthenticated, async (req, res) => {
+    try {
+      const resultados = await storage.getResultados(req.params.id);
+      res.json(resultados);
+    } catch (error) {
+      console.error("Error fetching resultados:", error);
+      res.status(500).json({ message: "Failed to fetch resultados" });
+    }
+  });
+
+  // Faturas routes (alias for /api/users/:id/faturas)
+  app.get('/api/pessoas/:id/faturas', isAuthenticated, async (req, res) => {
+    try {
+      const faturas = await storage.getFaturasWithUser(req.params.id);
+      res.json(faturas);
+    } catch (error) {
+      console.error("Error fetching user faturas:", error);
+      res.status(500).json({ message: "Failed to fetch faturas" });
     }
   });
 
@@ -898,7 +994,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json({ objectPath });
     } catch (error) {
       console.error("Error setting profile image:", error);
-      res.status(500).json({ error: "Internal server error" });
+      console.error("Profile image URL:", req.body.profileImageUrl);
+      console.error("User ID:", userId);
+      res.status(500).json({ 
+        error: "Internal server error",
+        message: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
