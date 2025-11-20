@@ -133,26 +133,29 @@ export class ObjectStorageService {
 
   // Gets the upload URL for an object entity.
   async getObjectEntityUploadURL(): Promise<string> {
-    const privateObjectDir = this.getPrivateObjectDir();
-    if (!privateObjectDir) {
-      throw new Error(
-        "PRIVATE_OBJECT_DIR not set. Create a bucket in 'Object Storage' " +
-          "tool and set PRIVATE_OBJECT_DIR env var."
-      );
+    try {
+      const privateObjectDir = this.getPrivateObjectDir();
+      const objectId = randomUUID();
+      const fullPath = `${privateObjectDir}/uploads/${objectId}`;
+
+      const { bucketName, objectName } = parseObjectPath(fullPath);
+
+      // Sign URL for PUT method with TTL
+      return await signObjectURL({
+        bucketName,
+        objectName,
+        method: "PUT",
+        ttlSec: 900,
+      });
+    } catch (err) {
+      // Development fallback: when PRIVATE_OBJECT_DIR is not set or signing fails
+      // return a relative API PUT URL so the frontend can upload via the current
+      // origin (and Vite's /api proxy). This allows local uploads to work in
+      // development/preview environments without an object storage bucket.
+      console.warn("objectStorage.getObjectEntityUploadURL - using local fallback:", err?.message ?? err);
+      const localId = randomUUID();
+      return `/api/local-uploads-upload/${localId}`;
     }
-
-    const objectId = randomUUID();
-    const fullPath = `${privateObjectDir}/uploads/${objectId}`;
-
-    const { bucketName, objectName } = parseObjectPath(fullPath);
-
-    // Sign URL for PUT method with TTL
-    return signObjectURL({
-      bucketName,
-      objectName,
-      method: "PUT",
-      ttlSec: 900,
-    });
   }
 
   // Gets the object entity file from the object path.
