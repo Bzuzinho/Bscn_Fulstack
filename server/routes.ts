@@ -972,10 +972,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Update profile image
   app.put("/api/profile-images", isAuthenticated, async (req, res) => {
-    const userId = (req as any).user?.claims?.sub;
+    const sessionUserId = (req as any).user?.claims?.sub;
     
     if (!req.body.profileImageUrl) {
       return res.status(400).json({ error: "profileImageUrl is required" });
+    }
+
+    // Use userId from request body, or fall back to authenticated user
+    const targetUserId = req.body.userId || sessionUserId;
+
+    // Permission check: only admin, the user itself, or its encarregado may update profile image
+    if (targetUserId !== sessionUserId) {
+      const existingUser = await storage.getUser(targetUserId);
+      if (!existingUser) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const isAdmin = ((req as any).user?.claims?.role || "").toString().toLowerCase() === "admin";
+      const isEncarregado = String(sessionUserId) === String(existingUser.encarregadoId ?? "");
+
+      if (!isAdmin && !isEncarregado) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
     }
 
     try {
@@ -983,19 +1001,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
         req.body.profileImageUrl,
         {
-          owner: userId,
+          owner: targetUserId,
           visibility: "public", // Profile images are public
         },
       );
 
       // Update user's profileImageUrl in database
-      await storage.updateUser(userId, { profileImageUrl: objectPath });
+      await storage.updateUser(targetUserId, { profileImageUrl: objectPath });
 
       res.status(200).json({ objectPath });
     } catch (error) {
       console.error("Error setting profile image:", error);
       console.error("Profile image URL:", req.body.profileImageUrl);
-      console.error("User ID:", userId);
+      console.error("User ID:", targetUserId);
       res.status(500).json({ 
         error: "Internal server error",
         message: error instanceof Error ? error.message : String(error)

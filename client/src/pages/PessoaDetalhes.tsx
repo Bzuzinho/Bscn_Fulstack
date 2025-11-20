@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useLocation, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -379,6 +379,32 @@ function DadosPessoaisTab({ user, escaloes, currentUser }: { user: User; escaloe
     },
   });
 
+  // Reset form when user data changes
+  useEffect(() => {
+    form.reset({
+      name: user.name || "",
+      numeroSocio: user.numeroSocio || "",
+      nif: user.nif || "",
+      cartaoCidadao: user.cartaoCidadao || "",
+      email: user.email || "",
+      contacto: user.contacto || "",
+      dataNascimento: user.dataNascimento || "",
+      sexo: user.sexo || undefined,
+      morada: user.morada || "",
+      codigoPostal: user.codigoPostal || "",
+      localidade: user.localidade || "",
+      empresa: user.empresa || "",
+      escola: user.escola || "",
+      estadoCivil: user.estadoCivil || undefined,
+      ocupacao: user.ocupacao || "",
+      nacionalidade: user.nacionalidade || "",
+      numeroIrmaos: user.numeroIrmaos || 0,
+      menor: user.menor || false,
+      escalaoId: user.escalaoId || undefined,
+      estadoUtilizador: user.estadoUtilizador || "ativo",
+    });
+  }, [user, form]);
+
   // Permissions (computed with currentUser passed as prop)
   const isAdmin = (currentUser?.role ?? "").toString().toLowerCase() === "admin";
   const isSelf = String(currentUser?.id ?? "") === String(user.id ?? "");
@@ -412,7 +438,10 @@ function DadosPessoaisTab({ user, escaloes, currentUser }: { user: User; escaloe
 
   const uploadProfileImageMutation = useMutation({
     mutationFn: async (profileImageUrl: string) => {
-      await apiRequest("PUT", "/api/profile-images", { profileImageUrl });
+      await apiRequest("PUT", "/api/profile-images", { 
+        profileImageUrl,
+        userId: user.id 
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/pessoas", user.id] });
@@ -913,6 +942,25 @@ function DadosDesportivosTab({
     },
   });
 
+  // Reset form when dados desportivos changes
+  useEffect(() => {
+    form.reset({
+      numeroFederacao: dadosDesportivos?.numeroFederacao || "",
+      pmb: dadosDesportivos?.pmb || "",
+      dataInscricao: dadosDesportivos?.dataInscricao || "",
+      altura: dadosDesportivos?.altura || "",
+      peso: dadosDesportivos?.peso || "",
+      atestadoMedico: dadosDesportivos?.atestadoMedico || false,
+      dataAtestado: dadosDesportivos?.dataAtestado || "",
+      informacoesMedicas: dadosDesportivos?.informacoesMedicas || "",
+      observacoes: dadosDesportivos?.observacoes || "",
+      patologias: dadosDesportivos?.patologias || "",
+      medicamentos: dadosDesportivos?.medicamentos || "",
+      cartaoFederacao: dadosDesportivos?.cartaoFederacao || "",
+      arquivoInscricao: dadosDesportivos?.arquivoInscricao || "",
+    });
+  }, [dadosDesportivos, form]);
+
   const updateDadosMutation = useMutation({
     mutationFn: async (data: any) => {
       await apiRequest("PUT", `/api/pessoas/${userId}/dados-desportivos`, data);
@@ -1359,6 +1407,21 @@ function ConfiguracaoTab({
       ficheiroAfiliacao: dadosConfiguracao?.ficheiroAfiliacao || "",
     },
   });
+
+  // Reset form when dados configuracao changes
+  useEffect(() => {
+    form.reset({
+      consentimento: dadosConfiguracao?.consentimento || false,
+      dataConsentimento: dadosConfiguracao?.dataConsentimento ? new Date(dadosConfiguracao.dataConsentimento).toISOString().split('T')[0] : "",
+      ficheiroConsentimento: dadosConfiguracao?.ficheiroConsentimento || "",
+      declaracaoTransporte: dadosConfiguracao?.declaracaoTransporte || false,
+      dataTransporte: dadosConfiguracao?.dataTransporte ? new Date(dadosConfiguracao.dataTransporte).toISOString().split('T')[0] : "",
+      ficheiroTransporte: dadosConfiguracao?.ficheiroTransporte || "",
+      afiliacao: dadosConfiguracao?.afiliacao || false,
+      dataAfiliacao: dadosConfiguracao?.dataAfiliacao ? new Date(dadosConfiguracao.dataAfiliacao).toISOString().split('T')[0] : "",
+      ficheiroAfiliacao: dadosConfiguracao?.ficheiroAfiliacao || "",
+    });
+  }, [dadosConfiguracao, form]);
 
   const updateConfigMutation = useMutation({
     mutationFn: async (data: any) => {
