@@ -158,7 +158,9 @@ Ambos os servidores suportam **hot reload**:
 
 Para fazer upload de imagens de perfil, é necessário configurar corretamente o CORS no bucket de armazenamento (S3/GCS). 
 
-**Ver**: [docs/S3_CORS_SETUP.md](docs/S3_CORS_SETUP.md) para instruções detalhadas sobre como configurar o CORS.
+**⚡ Correção Rápida**: [docs/QUICK_FIX_CORS.md](docs/QUICK_FIX_CORS.md) - Siga estes passos para resolver o problema de upload
+
+**📖 Documentação Completa**: [docs/S3_CORS_SETUP.md](docs/S3_CORS_SETUP.md) - Guia detalhado sobre CORS
 
 ## Troubleshooting
 
