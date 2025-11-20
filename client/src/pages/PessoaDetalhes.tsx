@@ -412,7 +412,10 @@ function DadosPessoaisTab({ user, escaloes, currentUser }: { user: User; escaloe
 
   const uploadProfileImageMutation = useMutation({
     mutationFn: async (profileImageUrl: string) => {
-      await apiRequest("PUT", "/api/profile-images", { profileImageUrl });
+      await apiRequest("PUT", "/api/profile-images", { 
+        profileImageUrl,
+        userId: user.id 
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/pessoas", user.id] });
