@@ -135,6 +135,43 @@ if (!allowedTypes.some(type => imageData.includes(type))) {
 }
 ```
 
+### Recomendações Adicionais de Segurança
+
+⚠️ **Rate Limiting** (Recomendado para produção): Adicione rate limiting ao endpoint de upload para prevenir abuso:
+
+```typescript
+import rateLimit from 'express-rate-limit';
+
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 10, // máximo 10 uploads por IP
+  message: 'Too many uploads from this IP, please try again later.'
+});
+
+app.post("/api/profile-images/upload", uploadLimiter, isAuthenticated, ...);
+```
+
+⚠️ **CSRF Protection** (Recomendado para produção): Implemente proteção CSRF:
+
+```typescript
+import csrf from 'csurf';
+
+const csrfProtection = csrf({ cookie: true });
+app.post("/api/profile-images/upload", csrfProtection, isAuthenticated, ...);
+```
+
+💡 **Content Security Policy**: Configure CSP headers para permitir data URIs:
+
+```typescript
+app.use((req, res, next) => {
+  res.setHeader(
+    'Content-Security-Policy',
+    "img-src 'self' data: https:;"
+  );
+  next();
+});
+```
+
 ## Vantagens
 
 ### ✅ Simplicidade
