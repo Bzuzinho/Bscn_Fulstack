@@ -238,7 +238,9 @@ export class DatabaseStorage implements IStorage {
     const { fatura, user } = result[0];
     return {
       ...fatura,
-      userName: user?.name || user?.firstName + ' ' + user?.lastName || 'Desconhecido',
+      userName: (user?.firstName && user?.lastName) 
+        ? `${user.firstName} ${user.lastName}` 
+        : user?.email || 'Desconhecido',
     };
   }
 
@@ -264,7 +266,9 @@ export class DatabaseStorage implements IStorage {
     
     return results.map(({ fatura, user }) => ({
       ...fatura,
-      userName: user?.name || user?.firstName + ' ' + user?.lastName || 'Desconhecido',
+      userName: (user?.firstName && user?.lastName) 
+        ? `${user.firstName} ${user.lastName}` 
+        : user?.email || 'Desconhecido',
     }));
   }
 

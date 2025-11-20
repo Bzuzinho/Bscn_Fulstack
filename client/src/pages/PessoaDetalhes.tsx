@@ -48,7 +48,8 @@ const estadoColors = {
 
 // Local (client-safe) Zod schemas to avoid importing runtime schemas from @shared
 const upsertUserSchemaLocal = z.object({
-  name: z.string().optional(),
+  firstName: z.string().optional(),
+  lastName: z.string().optional(),
   numeroSocio: z.string().optional(),
   nif: z.string().optional(),
   cartaoCidadao: z.string().optional(),
@@ -244,7 +245,7 @@ function PessoaDetalhesInner() {
           </Button>
           <div>
             <h1 className="text-3xl font-bold flex items-center gap-3">
-              {user.name || "Sem nome"}
+              {(user.firstName && user.lastName) ? `${user.firstName} ${user.lastName}` : user.nome || "Sem nome"}
               <Badge className={estadoColors[user.estadoUtilizador || "ativo" as keyof typeof estadoColors]}>
                 {estadoLabels[user.estadoUtilizador || "ativo" as keyof typeof estadoLabels]}
               </Badge>
@@ -271,7 +272,7 @@ function PessoaDetalhesInner() {
             <SelectContent>
               {allPessoas.filter((p: any) => p.menor).map((p: any) => (
                 <SelectItem key={p.id} value={String(p.id)}>
-                  {p.name || p.nome}
+                  {(p.firstName && p.lastName) ? `${p.firstName} ${p.lastName}` : p.nome || "Sem nome"}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -356,7 +357,8 @@ function DadosPessoaisTab({ user, escaloes, currentUser }: { user: User; escaloe
   const form = useForm({
     resolver: zodResolver(upsertUserSchemaLocal.partial()),
     defaultValues: {
-      name: user.name || "",
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
       numeroSocio: user.numeroSocio || "",
       nif: user.nif || "",
       cartaoCidadao: user.cartaoCidadao || "",
@@ -382,7 +384,8 @@ function DadosPessoaisTab({ user, escaloes, currentUser }: { user: User; escaloe
   // Reset form when user data changes
   useEffect(() => {
     form.reset({
-      name: user.name || "",
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
       numeroSocio: user.numeroSocio || "",
       nif: user.nif || "",
       cartaoCidadao: user.cartaoCidadao || "",
@@ -507,9 +510,9 @@ function DadosPessoaisTab({ user, escaloes, currentUser }: { user: User; escaloe
           <form onSubmit={form.handleSubmit((data) => updateUserMutation.mutate(data))} className="space-y-6">
             <div className="flex items-center gap-4 pb-6 border-b">
               <Avatar className="h-24 w-24">
-                <AvatarImage src={user.profileImageUrl ?? undefined} alt={user.name || ""} />
+                <AvatarImage src={user.profileImageUrl ?? undefined} alt={(user.firstName && user.lastName) ? `${user.firstName} ${user.lastName}` : ""} />
                 <AvatarFallback className="text-2xl">
-                  {user.name ? user.name.charAt(0).toUpperCase() : <UserIcon className="h-12 w-12" />}
+                  {user.firstName ? user.firstName.charAt(0).toUpperCase() : <UserIcon className="h-12 w-12" />}
                 </AvatarFallback>
               </Avatar>
               <div className="space-y-2">
@@ -529,12 +532,26 @@ function DadosPessoaisTab({ user, escaloes, currentUser }: { user: User; escaloe
             <div className="grid grid-cols-3 gap-4">
               <FormField
                 control={form.control}
-                name="name"
+                name="firstName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Nome Completo *</FormLabel>
+                    <FormLabel>Primeiro Nome *</FormLabel>
                     <FormControl>
-                      <Input {...field} data-testid="input-name" disabled={!canEdit} />
+                      <Input {...field} data-testid="input-firstName" disabled={!canEdit} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="lastName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Último Nome *</FormLabel>
+                    <FormControl>
+                      <Input {...field} data-testid="input-lastName" disabled={!canEdit} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -735,7 +752,7 @@ function DadosPessoaisTab({ user, escaloes, currentUser }: { user: User; escaloe
                               .filter((p: any) => p.id !== user.id)
                               .map((p: any) => (
                                 <SelectItem key={p.id} value={String(p.id)}>
-                                  {p.name || p.nome}
+                                  {(p.firstName && p.lastName) ? `${p.firstName} ${p.lastName}` : p.nome || "Sem nome"}
                                 </SelectItem>
                               ))}
                           </SelectContent>

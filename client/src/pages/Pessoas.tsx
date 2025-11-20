@@ -21,7 +21,9 @@ import { zodResolver } from "@hookform/resolvers/zod";
 // (shared schema imports cause runtime/type mismatches in the browser dev overlay).
 type PessoaLocal = {
   id: number;
-  nome: string;
+  firstName?: string;
+  lastName?: string;
+  nome: string; // Computed field for backwards compatibility
   email?: string | null;
   telemovel?: string | null;
   dataNascimento?: string | null;
@@ -30,6 +32,7 @@ type PessoaLocal = {
   cp?: string | null;
   localidade?: string | null;
   sexo?: string | null;
+  escalaoId?: number | null;
 };
 
 type EscalaoLocal = { id: number; nome: string };
@@ -39,9 +42,10 @@ import { format } from "date-fns";
 import { pt } from "date-fns/locale";
 
 // Local validation schema for the UI (avoid importing runtime Zod schema from server/shared)
-// Local form schema aligned with the legacy `pessoas` table column names
+// Updated to use firstName/lastName instead of nome
 const userFormSchema = z.object({
-  nome: z.string().min(1, "Nome completo é obrigatório"),
+  firstName: z.string().min(1, "Primeiro nome é obrigatório"),
+  lastName: z.string().min(1, "Último nome é obrigatório"),
   email: z.string().email("Email inválido").optional().or(z.literal("")),
   telemovel: z.string().optional().or(z.literal("")),
   nif: z.string().optional().or(z.literal("")),
@@ -70,7 +74,8 @@ export default function Pessoas() {
   const form = useForm<UserFormData>({
     resolver,
     defaultValues: {
-      nome: "",
+      firstName: "",
+      lastName: "",
       email: "",
       telemovel: "",
       nif: "",
@@ -165,13 +170,14 @@ export default function Pessoas() {
 
   const handleOpenDialog = () => {
     form.reset({
-      name: "",
+      firstName: "",
+      lastName: "",
       email: "",
-      contacto: "",
+      telemovel: "",
       nif: "",
       dataNascimento: "",
       morada: "",
-      codigoPostal: "",
+      cp: "",
       localidade: "",
       numeroSocio: "",
       escalaoId: null,
@@ -247,7 +253,7 @@ export default function Pessoas() {
                   <Avatar className="h-12 w-12">
                     <AvatarImage src={(user as any).profileImageUrl ?? undefined} alt={user.nome || ""} />
                     <AvatarFallback>
-                      {user.nome ? user.nome.charAt(0).toUpperCase() : <UserIcon className="h-6 w-6" />}
+                      {(user as any).firstName ? (user as any).firstName.charAt(0).toUpperCase() : <UserIcon className="h-6 w-6" />}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1">
@@ -331,15 +337,33 @@ export default function Pessoas() {
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="nome"
+                  name="firstName"
                   render={({ field }) => (
-                    <FormItem className="col-span-2">
-                      <FormLabel>Nome Completo *</FormLabel>
+                    <FormItem>
+                      <FormLabel>Primeiro Nome *</FormLabel>
                       <FormControl>
                         <Input 
-                          placeholder="João Silva" 
+                          placeholder="João" 
                           {...field}
-                          data-testid="input-nome"
+                          data-testid="input-firstName"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="lastName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Último Nome *</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="Silva" 
+                          {...field}
+                          data-testid="input-lastName"
                         />
                       </FormControl>
                       <FormMessage />
