@@ -438,9 +438,24 @@ function DadosPessoaisTab({ user, escaloes, currentUser }: { user: User; escaloe
     });
     if (!response.ok) throw new Error("Failed to get upload URL");
     const { uploadURL } = await response.json();
+    if (!uploadURL || typeof uploadURL !== "string") {
+      throw new Error("Invalid upload URL returned from server");
+    }
+
+    // Ensure we return an absolute URL. If the server returned a relative
+    // path (e.g. `/objects/...`) convert it to an absolute URL using the
+    // current origin. The URL constructor will throw for truly invalid URLs,
+    // so catch that and rethrow a clearer error for Uppy to show.
+    let finalUrl: string;
+    try {
+      finalUrl = new URL(uploadURL, window.location.origin).toString();
+    } catch (e) {
+      throw new Error(`Invalid upload URL: ${String(uploadURL)}`);
+    }
+
     return {
       method: "PUT" as const,
-      url: uploadURL,
+      url: finalUrl,
     };
   };
 
@@ -1103,7 +1118,16 @@ function DadosDesportivosTab({
                               });
                               if (!response.ok) throw new Error("Failed to get upload URL");
                               const { uploadURL } = await response.json();
-                              return { method: "PUT" as const, url: uploadURL };
+                              if (!uploadURL || typeof uploadURL !== "string") {
+                                throw new Error("Invalid upload URL returned from server");
+                              }
+                              let finalUrl: string;
+                              try {
+                                finalUrl = new URL(uploadURL, window.location.origin).toString();
+                              } catch (e) {
+                                throw new Error(`Invalid upload URL: ${String(uploadURL)}`);
+                              }
+                              return { method: "PUT" as const, url: finalUrl };
                             }}
                             onComplete={(result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
                               if (result.successful && result.successful.length > 0) {

@@ -300,6 +300,32 @@ async function signObjectURL({
     );
   }
 
-  const { signed_url: signedURL } = await response.json();
+  const body = await response.json().catch((e) => {
+    console.error("signObjectURL: failed to parse JSON from sidecar", e);
+    throw new Error("Failed to sign object URL: invalid response from sidecar");
+  });
+
+  // Accept common key names but prefer `signed_url`.
+  const signedURL = (body && (body.signed_url || body.signedUrl || body.url || body.signedURL)) as
+    | string
+    | undefined;
+
+  if (!signedURL || typeof signedURL !== "string") {
+    console.error("signObjectURL: invalid signed URL in response", { body });
+    throw new Error("Failed to sign object URL: invalid response from sidecar");
+  }
+
+  // Validate that it is an absolute http/https URL. Reject relative or malformed URLs.
+  try {
+    const parsed = new URL(signedURL);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      console.error("signObjectURL: signed URL has invalid protocol", signedURL);
+      throw new Error("Failed to sign object URL: signed URL has invalid protocol");
+    }
+  } catch (e) {
+    console.error("signObjectURL: signed URL is invalid", signedURL, e);
+    throw new Error("Failed to sign object URL: signed URL is invalid");
+  }
+
   return signedURL;
 }
