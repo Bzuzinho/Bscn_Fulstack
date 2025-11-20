@@ -197,10 +197,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(user);
     } catch (error) {
       if (error instanceof z.ZodError) {
+        console.error("Validation error updating pessoa:", JSON.stringify(error.errors, null, 2));
         return res.status(400).json({ message: "Invalid data", errors: error.errors });
       }
       console.error("Error updating pessoa:", error);
-      res.status(500).json({ message: "Failed to update pessoa" });
+      console.error("Request body:", JSON.stringify(req.body, null, 2));
+      res.status(500).json({ 
+        message: "Failed to update pessoa",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
@@ -989,7 +994,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(200).json({ objectPath });
     } catch (error) {
       console.error("Error setting profile image:", error);
-      res.status(500).json({ error: "Internal server error" });
+      console.error("Profile image URL:", req.body.profileImageUrl);
+      console.error("User ID:", userId);
+      res.status(500).json({ 
+        error: "Internal server error",
+        message: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
