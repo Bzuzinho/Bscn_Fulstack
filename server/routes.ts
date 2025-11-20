@@ -933,20 +933,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Object Storage routes - Referenced from blueprint:javascript_object_storage
-  // Get upload URL for profile image
-  app.post("/api/objects/upload", isAuthenticated, async (req, res) => {
+  // Object Storage routes - Direct database upload (no external storage needed)
+  // Upload profile image directly to database
+  app.post("/api/profile-images/upload", isAuthenticated, async (req, res) => {
     try {
-      const objectStorageService = new ObjectStorageService();
-      const uploadURL = await objectStorageService.getObjectEntityUploadURL();
-      res.json({ uploadURL });
+      // Expect base64 encoded image in request body
+      const { imageData, userId } = req.body;
+      
+      if (!imageData) {
+        return res.status(400).json({ error: "imageData is required" });
+      }
+
+      const sessionUserId = (req as any).user?.claims?.sub;
+      const targetUserId = userId || sessionUserId;
+
+      // Permission check: only admin, the user itself, or its encarregado may update profile image
+      if (targetUserId !== sessionUserId) {
+        const existingUser = await storage.getUser(targetUserId);
+        if (!existingUser) {
+          return res.status(404).json({ error: "User not found" });
+        }
+
+        const isAdmin = ((req as any).user?.claims?.role || "").toString().toLowerCase() === "admin";
+        const isEncarregado = String(sessionUserId) === String(existingUser.encarregadoId ?? "");
+
+        if (!isAdmin && !isEncarregado) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+      }
+
+      // Validate base64 format (should start with data: URI scheme)
+      if (!imageData.startsWith('data:')) {
+        return res.status(400).json({ error: "Invalid file format. Must be base64 data URI" });
+      }
+
+      // Validate file type for security
+      const allowedTypes = ['image/', 'application/pdf', 'application/msword', 'application/vnd.'];
+      const isAllowed = allowedTypes.some(type => imageData.includes(type));
+      if (!isAllowed) {
+        return res.status(400).json({ error: "File type not allowed" });
+      }
+
+      // Store base64 image directly in database
+      await storage.updateUser(targetUserId, { profileImageUrl: imageData });
+
+      res.status(200).json({ 
+        success: true,
+        profileImageUrl: imageData 
+      });
     } catch (error) {
-      console.error("Error getting upload URL:", error);
-      res.status(500).json({ message: "Failed to get upload URL" });
+      console.error("Error uploading profile image:", error);
+      res.status(500).json({ 
+        error: "Internal server error",
+        message: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
-  // Serve uploaded objects
+  // Legacy endpoint - kept for backwards compatibility but returns local upload endpoint
+  app.post("/api/objects/upload", isAuthenticated, async (req, res) => {
+    // Return local upload endpoint instead of external storage URL
+    res.json({ uploadURL: "/api/profile-images/upload-direct" });
+  });
+
+  // Serve uploaded objects - kept for backwards compatibility with existing URLs
+  // Note: With direct database storage, this endpoint is no longer used for new uploads
   app.get("/objects/:objectPath(*)", isAuthenticated, async (req, res) => {
     const userId = (req as any).user?.claims?.sub;
     const objectStorageService = new ObjectStorageService();
@@ -967,57 +1018,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.sendStatus(404);
       }
       return res.sendStatus(500);
-    }
-  });
-
-  // Update profile image
-  app.put("/api/profile-images", isAuthenticated, async (req, res) => {
-    const sessionUserId = (req as any).user?.claims?.sub;
-    
-    if (!req.body.profileImageUrl) {
-      return res.status(400).json({ error: "profileImageUrl is required" });
-    }
-
-    // Use userId from request body, or fall back to authenticated user
-    const targetUserId = req.body.userId || sessionUserId;
-
-    // Permission check: only admin, the user itself, or its encarregado may update profile image
-    if (targetUserId !== sessionUserId) {
-      const existingUser = await storage.getUser(targetUserId);
-      if (!existingUser) {
-        return res.status(404).json({ error: "User not found" });
-      }
-
-      const isAdmin = ((req as any).user?.claims?.role || "").toString().toLowerCase() === "admin";
-      const isEncarregado = String(sessionUserId) === String(existingUser.encarregadoId ?? "");
-
-      if (!isAdmin && !isEncarregado) {
-        return res.status(403).json({ error: "Forbidden" });
-      }
-    }
-
-    try {
-      const objectStorageService = new ObjectStorageService();
-      const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
-        req.body.profileImageUrl,
-        {
-          owner: targetUserId,
-          visibility: "public", // Profile images are public
-        },
-      );
-
-      // Update user's profileImageUrl in database
-      await storage.updateUser(targetUserId, { profileImageUrl: objectPath });
-
-      res.status(200).json({ objectPath });
-    } catch (error) {
-      console.error("Error setting profile image:", error);
-      console.error("Profile image URL:", req.body.profileImageUrl);
-      console.error("User ID:", targetUserId);
-      res.status(500).json({ 
-        error: "Internal server error",
-        message: error instanceof Error ? error.message : String(error)
-      });
     }
   });
 
