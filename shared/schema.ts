@@ -50,6 +50,10 @@ export const users = pgTable("users", {
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
 
+  // Legacy fields (deprecated - kept for backwards compatibility)
+  name: varchar("name", { length: 200 }), // DEPRECATED: Use firstName + lastName instead
+  profilePhotoPath: varchar("profile_photo_path", { length: 500 }), // DEPRECATED: Use profileImageUrl instead
+
   // Additional fields from PDF / expanded profile
   numeroSocio: varchar("numero_socio", { length: 50 }),
   estado: varchar("estado", { length: 50 }), // Status geral
@@ -89,7 +93,7 @@ export const users = pgTable("users", {
   // Role (will be replaced by RBAC)
   role: varchar("role", { length: 50 }).default('membro'),
 
-  // Config
+  // Config  
   observacoesConfig: text("observacoes_config"),
 
   // Timestamps
