@@ -553,7 +553,7 @@ export default function Financeiro() {
                       <SelectContent>
                         {users.map((user) => (
                           <SelectItem key={user.id} value={user.id}>
-                            {user.name || `${user.firstName} ${user.lastName}`}
+                            {(user.firstName && user.lastName) ? `${user.firstName} ${user.lastName}` : user.email || "Sem nome"}
                             {user.numeroSocio && ` (#${user.numeroSocio})`}
                           </SelectItem>
                         ))}

@@ -52,7 +52,6 @@ export const users = pgTable("users", {
 
   // Additional fields from PDF / expanded profile
   numeroSocio: varchar("numero_socio", { length: 50 }),
-  name: varchar("name", { length: 200 }), // Full name
   estado: varchar("estado", { length: 50 }), // Status geral
   estadoUtilizador: estadoUtilizadorEnum("estado_utilizador").default('ativo'),
 
@@ -91,7 +90,6 @@ export const users = pgTable("users", {
   role: varchar("role", { length: 50 }).default('membro'),
 
   // Config
-  profilePhotoPath: varchar("profile_photo_path", { length: 500 }),
   observacoesConfig: text("observacoes_config"),
 
   // Timestamps
